@@ -96,6 +96,189 @@ Notes:
 - Without a "smart Tera" AI flag, trainers Terastallize on the first turn. With it (`smartTera` in the trainer's AI flags), they pick a better moment.
 - Pasting a Showdown or `.party` team also works: `Tera Type: Fire`, `Dynamax: Yes`, `Dynamax Level: 10`.
 
+CUBHMA is based on Hex Maniac Advance made by haven
+CUBE uses resources from pret's pokeemerald decomp and ROM Hacking Hideout's pokeemerald-expansion, view the full list of credits here:
+
+GriffinR
+DizzyEggg
+PikalaxALT
+Diegoisawesome
+Kermalis
+Marcus Huderle
+YamaArashi
+Phlosioneer
+scnorton
+Kurausukun
+Eduardo Quezada
+PokeCodec
+garak
+golem galvanize
+Martin Griffin
+ProjectRevoTPP
+Slawter666
+luckytyphlosion
+KDSKardabox
+huderlem
+LOuroboros
+Sewef
+camthesaxman
+N
+Sierra A
+jiangzhengwenjz
+Deokishisu
+MCboy
+Melody
+Sierraffinity
+tustin2121
+yenatch
+hondew
+AZero13
+U-User-PC\User
+itskobold
+ExpoSeed
+ultima-soul
+sphericalice
+cbt6
+kiliwily
+Cameron Hall
+SphericalIce
+Bassoonian
+SatoMew
+Meowsy
+Michael Panzlaff
+Tetrable
+nullableVoidPtr
+DavidJCobb
+Fontbane
+Jaizu
+Tustin2121
+sbird
+AsparagusEduardo
+Frank
+Kaz
+shinyquagsire23
+Icedude907
+aaaaaa123456789
+gAlfonso-bit
+Avara
+Edouard Veyrier
+Thomas Winwood
+cawtds
+garakmon
+Abaresk
+Ariel Antonitis
+Colton G. Rushton
+Devin
+Eduardo Quezada D'Ottone
+Estellar
+Garak
+PlatinumMaster
+AJ Fontaine
+FosterProgramming
+Philipp AUER
+Raymond Dodge
+opakedragon
+psf
+sceptillion
+sneed
+Alex
+Anders Løvig
+Josh
+NT_x86
+brain_face
+pi1024e
+shinny456
+EternalCode
+Hedara
+Simply BLG
+Zunawe
+froggestspirit
+hedara90
+hjk321
+kaboissonneault
+mitsunee
+pkmnsnfrn
+shachar700
+vblm12
+Evan
+Flametix
+Pokestia
+Remy Oukaour
+Revo
+SBird
+Sebastian Gabl
+ShinyDragonHunter
+WhenGryphonsFly
+adrianrfreedman
+kittenchilly
+leo60228
+xenonnsmb
+AnonymousRandomPerson
+Jademalo
+Jan Helbling
+Jefferson Steelflex
+MandL27
+MeatLoaf3
+Missingmew
+Ryuhouji
+Sahith Nallapareddy
+Scyrous
+Seth Barberee
+Skye Chappelle
+SnorlaxMonster
+Wiz
+kageru
+laqieer
+mid-kid
+mike-goutokuji
+Alex Nash
+AlexOn1ine
+Andrea Jemmett
+Ashley Coleman
+BlackShark
+Catnip-Consumer
+Collin Styles
+Eldred Habert
+Flit
+Frank DeBlasio
+Frogg
+Gudf
+HornedCrusader
+IIMarckus
+Isaac Aronson
+Jamie Foster
+Kevin Mills
+Kildemal
+Lactozilla
+Marky
+Mitsunee
+PALPATlNE
+PSF
+Papa Cancer
+PokeCF
+Rangi
+RavePossum
+Rose
+Scott
+Seija
+SiliconA-Z
+Tim Gates
+William Jackson
+Wyrserth
+abcboy101
+aichiya
+aueuaio
+citrusbolt
+einstein95
+ghoulslash
+grunt-lucas
+gruxor
+marlux895
+melthelesbian
+pokballs
+pokemonmasteraaron
+quocmanh94
+surtr-games
 ---
 
 ## Original Hex Maniac Advance README
