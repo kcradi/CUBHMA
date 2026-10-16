@@ -174,6 +174,7 @@ namespace HavenSoft.HexManiac.WPF.Controls {
          textBox.Loaded -= HandleTextboxLoadedFromClick;
          Keyboard.Focus(textBox);
          Focusable = false;
+         if (SelectAllOnFocus.GetIsEnabled(this)) return; // the focus selected all the text: keep it that way
          var position = Mouse.GetPosition(textBox);
          var index = textBox.GetCharacterIndexFromPoint(position, true);
          if (index < 0) return;
@@ -214,6 +215,7 @@ namespace HavenSoft.HexManiac.WPF.Controls {
                textBox.SetBinding(TextBox.TextProperty, new Binding(nameof(FieldArrayElementViewModel.Content)) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
             }
             textBox.SetBinding(Control.ForegroundProperty, new Binding(nameof(Foreground)) { Source = this });
+            if (SelectAllOnFocus.GetIsEnabled(this)) SelectAllOnFocus.SetIsEnabled(textBox, true);
             Content = textBox;
             textBox.ContextMenuOpening += (sender, args) => keepTextBoxForContextMenu = true;
             textBox.ContextMenuClosing += (sender, args) => keepTextBoxForContextMenu = false;

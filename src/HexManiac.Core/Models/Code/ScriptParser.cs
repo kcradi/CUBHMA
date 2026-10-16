@@ -355,7 +355,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                               model.ClearFormat(token, address + length, 4);
                               model.ObserveRunWritten(token, new PointerRun(address + length));
                            }
-                           if (arg.PointerType == ExpectedPointerType.Script) {
+                           // a script pointer that leads to the start of a table (a pointer in thumb code that was mistaken for a script, say) does not turn the table into a script
+                           if (arg.PointerType == ExpectedPointerType.Script && !(destinationRun is ITableRun && destinationRun.Start == destination)) {
                               toProcess.Add(destination);
                               if (destination.InRange(address, address + desiredLength)) desiredLength = destination - address;
                            }
@@ -780,7 +781,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       public List<string> ReadOptions(IDataModel model, string tableName, string token) {
          if (ScriptArg.IsNumberOrNameSpec(tableName)) {
             if (string.IsNullOrEmpty(token) || !(char.IsLetter(token[0]) || token[0] == '_')) return new List<string>();
-            tableName = ScriptArg.GetListName(tableName);
+            tableName = ScriptArg.ListForDisplay(ScriptArg.GetListName(tableName)) ?? ScriptArg.GetListName(tableName);
          }
          if (!string.IsNullOrEmpty(tableName)) {
             var isList = model.TryGetList(tableName, out var list);

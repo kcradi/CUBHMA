@@ -4,13 +4,14 @@
              xmlns:local="clr-namespace:HavenSoft.HexManiac.WPF.Controls">
    <!-- This panel takes you to the table tool, to the appropriate table based on which pokemon you want to edit. -->
    <!-- It takes you to the page where you see the rate and a textbox for all the pokemon, such as 39B738 in Ruby -->
-   <Grid Width="320" Height="240" Background="{DynamicResource Background}">
+   <Grid Width="320" MinHeight="240" Background="{DynamicResource Background}">
       <Grid.RowDefinitions>
          <RowDefinition Height="Auto" />
          <RowDefinition Height="Auto" />
-         <RowDefinition />
-         <RowDefinition />
-         <RowDefinition />
+         <RowDefinition MinHeight="40" />
+         <RowDefinition MinHeight="40" />
+         <RowDefinition MinHeight="40" />
+         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
       <Grid.ColumnDefinitions>
          <ColumnDefinition />
@@ -137,5 +138,20 @@
             </local:AngleButton.Style>
          </local:AngleButton>
       </Decorator>
+      <!-- CUBE: overworld wild Pokemon on/off for this map (only when the ROM's TOML has data.maps.wild.overworld) -->
+      <CheckBox Grid.Row="5" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0,2,0,6"
+                Content="Overworld wild Pokemon" IsChecked="{Binding OverworldWildPokemon}"
+                ToolTip="Checked: wild Pokemon walk around on this map and only touching one starts a battle (no random battles in the grass). Unchecked: the regular random encounters in grass, caves and water.">
+         <CheckBox.Style>
+            <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+               <Setter Property="Visibility" Value="Visible" />
+               <Style.Triggers>
+                  <DataTrigger Binding="{Binding HasOverworldWildPokemonOption}" Value="False">
+                     <Setter Property="Visibility" Value="Collapsed" />
+                  </DataTrigger>
+               </Style.Triggers>
+            </Style>
+         </CheckBox.Style>
+      </CheckBox>
    </Grid>
 </UserControl>

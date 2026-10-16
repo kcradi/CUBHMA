@@ -1,4 +1,4 @@
-using HavenSoft.HexManiac.Core.Models;
+﻿using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.Models.Code;
 using HavenSoft.HexManiac.Core.Models.Runs;
 using HavenSoft.HexManiac.Core.ViewModels.DataFormats;
@@ -442,6 +442,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
          dataForCurrentRunChangeUpdate = true;
          var basename = model.GetAnchorFromAddress(-1, array.Start);
+         var hasAnchorName = !string.IsNullOrEmpty(basename);
          var anchorParts = basename.Split('.');
          NotifyPropertyChanged(nameof(TableSections));
          if (anchorParts.Length == 1) {
@@ -554,7 +555,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             }
             if (showsOverworldSprites && OverworldSecondaryElementViewModel.IsSupported(model)) AddOverworldSecondaryColumn();
             if (array is not ArrayRun && streamGroup != null) streamGroup.GroupName = NameForStreamGroup(streamGroup);
-            AddChildrenFromStreams(array, basename, index);
+            if (hasAnchorName || basename != array.Start.ToString("X6")) AddChildrenFromStreams(array, basename, index); // no stream, table, script or map can use a table that has no name (like an encounter list): skip the search through the whole ROM
          }
 
          while (Groups.Count > childIndexGroup) Groups.RemoveAt(Groups.Count - 1);
@@ -657,12 +658,37 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
       // There are tens of thousands of streams and thousands of tables in a ROM, and which of them refer to a table
       // only changes when the data does: look once per table instead of on every refresh.
+      // Which streams and tables use a table depends on the formats of the whole ROM (model.Streams alone goes through every run: 4 ms in CUBE),
+      // and it can only change when a run (a format) of a model changed: typing a number into the table changes none. Keep the answer until then.
+      private long usingCacheStamp = -1;
+      private readonly Dictionary<string, IReadOnlyList<IStreamRun>> streamsUsingCache = new();
+      private readonly Dictionary<string, IReadOnlyList<ArrayRun>> arraysUsingCache = new();
+
+      private bool UsingCacheIsValid() {
+         var stamp = ModelEditStamp.RunsCurrent;
+         if (!model.InitializationWorkload.IsCompleted) return false; // a model that is still loading finds its tables without going through the edit counter
+         if (usingCacheStamp != stamp) {
+            streamsUsingCache.Clear();
+            arraysUsingCache.Clear();
+            usingCacheStamp = stamp;
+         }
+         return true;
+      }
+
       private IReadOnlyList<IStreamRun> StreamsUsing(string basename) {
-         return model.CurrentCacheScope.GetOrAdd<IReadOnlyList<IStreamRun>>("table-tool-streams-using:" + basename, () => model.Streams.Where(stream => stream.DependsOn(basename)).ToList());
+         var useCache = UsingCacheIsValid();
+         if (useCache && streamsUsingCache.TryGetValue(basename, out var cached)) return cached;
+         var result = model.CurrentCacheScope.GetOrAdd<IReadOnlyList<IStreamRun>>("table-tool-streams-using:" + basename, () => model.Streams.Where(stream => stream.DependsOn(basename)).ToList());
+         if (useCache) streamsUsingCache[basename] = result;
+         return result;
       }
 
       private IReadOnlyList<ArrayRun> ArraysUsing(string basename) {
-         return model.CurrentCacheScope.GetOrAdd<IReadOnlyList<ArrayRun>>("table-tool-arrays-using:" + basename, () => model.Arrays.Where(table => table.DependsOn(basename)).ToList());
+         var useCache = UsingCacheIsValid();
+         if (useCache && arraysUsingCache.TryGetValue(basename, out var cached)) return cached;
+         var result = model.CurrentCacheScope.GetOrAdd<IReadOnlyList<ArrayRun>>("table-tool-arrays-using:" + basename, () => model.Arrays.Where(table => table.DependsOn(basename)).ToList());
+         if (useCache) arraysUsingCache[basename] = result;
+         return result;
       }
 
       private void AddChildrenFromStreams(ITableRun array, string basename, int index) {

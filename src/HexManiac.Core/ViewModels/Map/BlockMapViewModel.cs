@@ -653,6 +653,13 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
          if (SelectedEvent != null) CycleActiveEvent(default, EventCycleDirection.None);
       }
 
+      /// <summary>The View menu changed how graphics-variable events are drawn: draw all the events again.</summary>
+      public void RefreshEventGraphics() {
+         allOverworldSprites = null;
+         ClearEventGroupCache();
+         RedrawEvents();
+      }
+
       public void RedrawEvents() {
          eventRenders = null;
          NotifyPropertyChanged(nameof(CanCreateFlyEvent));
@@ -2587,15 +2594,19 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
          }
          init => allOverworldSprites = value;
       }
-      public static IPixelViewModel GetDefaultOW(IDataModel model) {
-         var defaultSpriteAddress = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, HardcodeTablesModel.PokeIconsTable + "/0/icon/");
+      public static IPixelViewModel GetDefaultOW(IDataModel model) => GetPokemonIconAsSprite(model, 0) ?? new ReadonlyPixelViewModel(16, 16);
+
+      /// <summary>The icon of a species, shaped like an overworld sprite (null if the ROM has no icon for it). Species 0 is the question mark, species 1 the first Pokemon of the Pokedex.</summary>
+      public static IPixelViewModel GetPokemonIconAsSprite(IDataModel model, int species) {
+         var defaultSpriteAddress = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, HardcodeTablesModel.PokeIconsTable + $"/{species}/icon/");
          var defaultSpriteRun = model.GetNextRun(defaultSpriteAddress) as ISpriteRun;
          if (defaultSpriteRun == null) {
             // decomp-based ROMs keep the icon inside the species table
-            defaultSpriteAddress = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, HardcodeTablesModel.PokemonStatsTable + "/0/icon/");
+            defaultSpriteAddress = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, HardcodeTablesModel.PokemonStatsTable + $"/{species}/icon/");
             defaultSpriteRun = model.GetNextRun(defaultSpriteAddress) as ISpriteRun;
          }
-         var defaultImage = defaultSpriteRun == null ? new ReadonlyPixelViewModel(16, 16) : model.CurrentCacheScope.GetImage(defaultSpriteRun);
+         if (defaultSpriteRun == null) return null;
+         var defaultImage = model.CurrentCacheScope.GetImage(defaultSpriteRun);
          if (defaultImage.PixelHeight > 24) {
             var canvas = new CanvasPixelViewModel(defaultImage.PixelWidth, 24) { Transparent = defaultImage.PixelData[0] };
             canvas.Draw(defaultImage, 0, 24 - Math.Min(32, defaultImage.PixelHeight));
@@ -2608,7 +2619,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
       /// for every navigation (warps, back/forward, goto), so share the renders until the data changes.
       /// </summary>
       public static IReadOnlyList<IPixelViewModel> GetOverworldSpriteRenders(IDataModel model) {
-         return model.CurrentCacheScope.GetOrAdd("overworld-sprite-renders", () => RenderOWs(model));
+         return model.CurrentCacheScope.GetOrAdd("overworld-sprite-renders:" + ObjectEventViewModel.GraphicsVariableDisplay, () => RenderOWs(model));
       }
 
       public static List<IPixelViewModel> RenderOWs(IDataModel model) {

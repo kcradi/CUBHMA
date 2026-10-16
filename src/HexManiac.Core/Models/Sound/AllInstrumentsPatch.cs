@@ -43,7 +43,7 @@ namespace HavenSoft.HexManiac.Core.Models.Sound {
                case AllInstrumentsState.Unreadable:
                   return $"All Instruments patch: not usable - the voicegroup {AllInstrumentsPatch.VoicegroupName} at {Address:X6} does not look like a list of instruments, so it is not used.";
                default:
-                  return "All Instruments patch: not applied (standard voicegroups only) - MIDI and .s songs made for it will play with the voicegroup you choose below, so they may not sound as intended.";
+                  return "All Instruments patch: not applied (standard voicegroups only) - " + AllInstrumentsPatch.NoBankNote + ". MIDI songs are made with the voicegroup you choose below and may not sound as intended.";
             }
          }
       }
@@ -69,6 +69,8 @@ namespace HavenSoft.HexManiac.Core.Models.Sound {
    /// which songs made with mid2agb -G_all_instruments and MIDI files are meant for.
    /// </summary>
    public static class AllInstrumentsPatch {
+      public const string NoBankNote = "This ROM has no General MIDI instrument bank; pick one of the voicegroups of the game";
+
       public const string VoicegroupName = "all_instruments";
 
       /// <summary>The anchor the CUBE metadata gives the voicegroup.</summary>

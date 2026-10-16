@@ -10,6 +10,37 @@ namespace HavenSoft.HexManiac.WPF.Controls {
          InitializeComponent();
       }
 
+      private bool? twoColumns;
+
+      private void ControlSizeChanged(object sender, SizeChangedEventArgs e) => ApplyLayout(CharacterCustomizationTab.UseTwoColumns(ActualWidth));
+
+      /// <summary>
+      /// Wide: the lists and the previews side by side, each in its own scroll viewer. Narrow: both moved into one scroll viewer, the previews under the lists.
+      /// The columns are moved, not copied, so their bindings and state stay as they are.
+      /// </summary>
+      private void ApplyLayout(bool wide) {
+         if (twoColumns == wide) return;
+         twoColumns = wide;
+         if (wide) {
+            PageStack.Children.Clear();
+            LeftColumn.Width = 452;
+            RightColumn.Margin = new Thickness(2, 8, 2, 8);
+            LeftScroll.Content = LeftColumn;
+            RightScroll.Content = RightColumn;
+            PageScroll.Visibility = Visibility.Collapsed;
+            Columns.Visibility = Visibility.Visible;
+         } else {
+            LeftScroll.Content = null;
+            RightScroll.Content = null;
+            LeftColumn.Width = double.NaN; // the list cards shrink to the window (they are at most 440 wide)
+            RightColumn.Margin = new Thickness(12, 0, 2, 8);
+            PageStack.Children.Add(LeftColumn);
+            PageStack.Children.Add(RightColumn);
+            Columns.Visibility = Visibility.Collapsed;
+            PageScroll.Visibility = Visibility.Visible;
+         }
+      }
+
       /// <summary>A click anywhere on a row (even in its name box) selects the row. The click still goes on to the name box.</summary>
       private void RowPressed(object sender, MouseButtonEventArgs e) {
          if (sender is FrameworkElement element && element.DataContext is CharacterColorRowItem item) item.Select.Execute(null);

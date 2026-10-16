@@ -1117,16 +1117,26 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       }
 
       /// <summary>
-      /// The voicegroup that is picked for inserting songs when the ROM has no All Instruments one: the first voicegroup of the list that holds a real set of instruments
-      /// (the small voicegroups that 'Add new song' makes for one song each, with a few instruments and filler in every other slot, are not a good start for the next song), or else the first one.
+      /// The voicegroup that is picked for inserting songs when the ROM has no All Instruments one: of the voicegroups that hold a real set of instruments
+      /// (the small voicegroups that 'Add new song' makes for one song each, with a few instruments and filler in every other slot, are not a good start for the next song),
+      /// the one that the most songs of the game use (the first of them when several are used equally often), or else the first voicegroup of the list.
       /// </summary>
-      private VoicegroupItem DefaultVoicegroup()
-         => Voicegroups.FirstOrDefault(group => !group.Info.IsCustom && VoicegroupCatalog.CountRealInstruments(model, group.Address, group.Info.EntryCount) >= 16) ?? Voicegroups.FirstOrDefault();
+      private VoicegroupItem DefaultVoicegroup() {
+         var real = Voicegroups.Where(group => !group.Info.IsCustom && VoicegroupCatalog.CountRealInstruments(model, group.Address, group.Info.EntryCount) >= 16).ToList();
+         VoicegroupItem best = null;
+         foreach (var group in real) if (best == null || group.Info.UsedBy.Count > best.Info.UsedBy.Count) best = group;
+         return best ?? Voicegroups.FirstOrDefault();
+      }
+
+      /// <summary>What the Sound tab says when the ROM has no General MIDI instrument bank (no All Instruments voicegroup).</summary>
+      public const string NoGeneralMidiBankNote = AllInstrumentsPatch.NoBankNote;
 
       /// <summary>The All Instruments voicegroup (anchored as sound.voicegroups.all_instruments), if the ROM has it.</summary>
-      private VoicegroupItem FindAllInstrumentsVoicegroup()
-         => Voicegroups.FirstOrDefault(group => string.Equals(group.Info.AnchorName, AllInstrumentsAnchor, StringComparison.OrdinalIgnoreCase) && !group.Info.IsCustom)
-         ?? Voicegroups.FirstOrDefault(group => string.Equals(group.Info.Name, "all_instruments", StringComparison.OrdinalIgnoreCase) && !group.Info.IsCustom);
+      private VoicegroupItem FindAllInstrumentsVoicegroup() {
+         // the same verdict as the note under the description: a voicegroup that only carries the name (an old toml whose anchor now points at other data) is not a bank
+         if (allInstruments == null || !allInstruments.IsApplied) return null;
+         return Voicegroups.FirstOrDefault(group => group.Address == allInstruments.Address && !group.Info.IsCustom);
+      }
 
       /// <summary>
       /// The voicegroup a MIDI file is played with. The instruments of a MIDI file are General MIDI programs, which the All Instruments voicegroup is laid out for,
@@ -1135,7 +1145,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       /// </summary>
       private VoicegroupItem ChooseVoicegroupForMidi() {
          if (voicegroupPickedByUser || OverrideVoicegroup) return selectedVoicegroup;
-         return FindAllInstrumentsVoicegroup() ?? selectedVoicegroup;
+         // no bank in this ROM: the voicegroup most songs use, not the voicegroup of whichever song happens to be selected
+         return FindAllInstrumentsVoicegroup() ?? DefaultVoicegroup() ?? selectedVoicegroup;
       }
 
       /// <summary>The options of the conversion, from the settings of the tab and the voicegroup the song is made for.</summary>
@@ -1164,6 +1175,9 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          Status = $"Converted {file.Name}: {song.Tracks} track{(song.Tracks == 1 ? string.Empty : "s")}, {ToneData.FormatSize(song.Size)}; inserted as song {song.Index}{(string.IsNullOrEmpty(song.Name) ? string.Empty : " (" + song.Name + ")")} at {song.Address:X6}, instruments from {song.PlayedWith}.{song.VoicegroupMessage}";
          // A MIDI file is read as General MIDI when nothing else was chosen. A MIDI file from a game's own source folder (pokeemerald's sound/songs/midi, for example) is not:
          // its programs are the slots of that game's voicegroup, so the General MIDI instruments make it sound like another song.
+         if (!general && !voicegroupPickedByUser && !OverrideVoicegroup && allInstruments != null && !allInstruments.IsApplied) {
+            Status += $" {NoGeneralMidiBankNote} ('Insert with voicegroup'): this song uses {song.PlayedWith}, the voicegroup most songs of the game use, so its instruments may not be the ones the MIDI file was written for. Undo, pick another voicegroup and insert the file again if it sounds wrong.";
+         }
          if (general) {
             Status += " Its instruments are General MIDI programs. If the file comes from a game's own folder (its programs are slots of that game's voicegroup), undo, pick that voicegroup under 'Insert with voicegroup' and insert the file again.";
          }

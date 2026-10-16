@@ -225,6 +225,53 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
 
       #endregion
 
+      #region Overworld wild Pokemon (CUBE)
+
+      /// <summary>
+      /// CUBE (pokeemerald-expansion with Overworld Wild Encounters): one bit per map, set = no overworld wild Pokemon on that map
+      /// (random grass/cave/surf battles instead). Byte [group * 32 + map / 8], bit (map % 8). All zero = overworld Pokemon everywhere.
+      /// ROMs/TOMLs without this anchor don't show the checkbox.
+      /// </summary>
+      public const string OverworldTableName = "data.maps.wild.overworld";
+      public const int OverworldGroups = 256, OverworldBytesPerGroup = 32;
+
+      /// <summary>Address of the byte holding this map's bit, or -1 when the ROM has no (valid) overworld table.</summary>
+      private int OverworldByteAddress {
+         get {
+            if (bank < 0 || bank >= OverworldGroups || map < 0 || map >= OverworldBytesPerGroup * 8) return -1;
+            var address = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, OverworldTableName);
+            if (address < 0 || address >= model.Count) return -1;
+            // only trust a run of the expected size: a different anchor format must not give a misleading checkbox
+            var run = model.GetNextRun(address);
+            if (run.Start != address || run.Length < OverworldGroups * OverworldBytesPerGroup) return -1;
+            if (address + OverworldGroups * OverworldBytesPerGroup > model.Count) return -1;
+            return address + bank * OverworldBytesPerGroup + map / 8;
+         }
+      }
+
+      public bool HasOverworldWildPokemonOption => OverworldByteAddress >= 0;
+
+      /// <summary>Checked (the default) = wild Pokemon walk around in the overworld and only touching one starts a battle.</summary>
+      public bool OverworldWildPokemon {
+         get {
+            var address = OverworldByteAddress;
+            if (address < 0) return true;
+            return (model[address] & (1 << (map % 8))) == 0;
+         }
+         set {
+            var address = OverworldByteAddress;
+            if (address < 0 || value == OverworldWildPokemon) return;
+            var bit = 1 << (map % 8);
+            var original = model[address];
+            var updated = (byte)(value ? original & ~bit : original | bit);
+            tokenFactory().ChangeData(model, address, updated);
+            viewPort.ChangeHistory.ChangeCompleted();
+            NotifyPropertyChanged();
+         }
+      }
+
+      #endregion
+
       #region Buttons for the Tables
 
       private StubCommand gotoGrass, gotoTree, gotoFishing, gotoSurf, gotoHidden;
@@ -350,7 +397,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
          wildDataIndex = int.MinValue;
          wildText = null;
          hasTimesOfDay = null;
-         NotifyPropertiesChanged(nameof(HasWildData), nameof(WildSummary), nameof(HasTimesOfDay), nameof(HasHidden));
+         NotifyPropertiesChanged(nameof(HasWildData), nameof(WildSummary), nameof(HasTimesOfDay), nameof(HasHidden), nameof(HasOverworldWildPokemonOption), nameof(OverworldWildPokemon));
          NotifyExistsChanged();
       }
 

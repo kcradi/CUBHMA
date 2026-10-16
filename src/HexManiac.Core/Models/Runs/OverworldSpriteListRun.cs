@@ -229,17 +229,11 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          if (!IsPointerAt(parent, listOffset - 4)) return 0;
          var table = model.ReadPointer(elementStart + listOffset - 4);
          if (table < 0 || table + 4 > model.Count) return 0;
-         var biggest = -1;
-         for (int i = 0; i < 16; i++) { // an animation table has a handful of sequences; stop at the first entry that is not a pointer
-            var sequence = model.ReadPointer(table + 4 * i);
-            if (sequence < 0 || sequence + 4 > model.Count) break;
-            for (int command = 0; command < 128 && sequence + 4 * command + 4 <= model.Count; command++) {
-               var type = (short)model.ReadMultiByteValue(sequence + 4 * command, 2);
-               if (type == -3) continue;   // loop
-               if (type < 0) break;        // jump or end
-               biggest = Math.Max(biggest, type);
-            }
-         }
+         // The player's table holds 28 sequences (the running ones, whose pictures 9 to 17 are the second half of the player's sheet, are number 20 to 23),
+         // so every entry has to be read. The next table is another sprite's: it starts at the next anchor (the pointer that uses it makes one), so stop there.
+         var nextAnchor = model.GetNextAnchor(table + 1).Start;
+         var limit = nextAnchor > table && nextAnchor < model.Count ? nextAnchor - table : 0;
+         var biggest = OverworldAnimations.BiggestFrame(OverworldAnimations.Read(model, table, limit));
          return biggest + 1;
       }
 

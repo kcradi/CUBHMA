@@ -76,7 +76,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       }
    }
 
-   /// <summary>The boy or the girl: standing and walking in the overworld, the trainer front picture and the back picture, all wearing the chosen colours.</summary>
+   /// <summary>The boy or the girl: standing in the overworld (facing down, up and left, no walking frames), the trainer front picture and the back picture, all wearing the chosen colours.</summary>
    public class CharacterPreviewPanel : ViewModelCore {
       private readonly CharacterCustomizationTab tab;
       private CharacterSprites sprites;
@@ -84,9 +84,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public int Gender { get; }
       public string Title => Gender == CharacterRole.Male ? "Boy (Brendan)" : "Girl (May)";
 
-      public PixelPreview Standing { get; } = new PixelPreview();
-      public PixelPreview WalkingA { get; } = new PixelPreview();
-      public PixelPreview WalkingB { get; } = new PixelPreview();
+      /// <summary>The overworld frames the preview shows, in order: standing facing down, facing up, facing left (<see cref="CharacterSprites.OverworldFrameNumbers"/>).</summary>
+      public IReadOnlyList<CharacterFramePreview> OverworldFrames { get; } = CharacterSprites.OverworldFrameLabels.Select(label => new CharacterFramePreview(label)).ToArray();
+      /// <summary>Standing still, facing down (the first of <see cref="OverworldFrames"/>).</summary>
+      public PixelPreview Standing => OverworldFrames[0].Image;
       public PixelPreview Front { get; } = new PixelPreview();
       public PixelPreview Back { get; } = new PixelPreview();
 
@@ -130,19 +131,17 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       }
 
       public void SetScale(double scale) {
-         foreach (var preview in new[] { Standing, WalkingA, WalkingB, Front, Back }) preview.SpriteScale = scale;
+         foreach (var preview in OverworldFrames.Select(frame => frame.Image).Concat(new[] { Front, Back })) preview.SpriteScale = scale;
       }
 
       public void Redraw(CharacterRole overworld, CharacterRole trainer, CharacterColorRow skin, CharacterColorRow clothes, CharacterColorRow secondary = null) {
          if (sprites == null) return;
-         Standing.Replace(sprites.DrawOverworld(0, overworld, skin, clothes, secondary));
-         WalkingA.Replace(sprites.DrawOverworld(1, overworld, skin, clothes, secondary));
-         WalkingB.Replace(sprites.DrawOverworld(2, overworld, skin, clothes, secondary));
+         for (int i = 0; i < OverworldFrames.Count; i++) OverworldFrames[i].Image.Replace(sprites.DrawOverworld(i, overworld, skin, clothes, secondary));
          Front.Replace(sprites.DrawFront(trainer, skin, clothes, secondary));
          Back.Replace(sprites.DrawBack(trainer, skin, clothes, secondary));
       }
 
-      /// <summary>The standing picture for the grids, or null if the ROM doesn't have the sprite.</summary>
+      /// <summary>The standing picture (facing down) for the grids, or null if the ROM doesn't have the sprite.</summary>
       public IPixelViewModel DrawStanding(CharacterRole overworld, CharacterColorRow skin, CharacterColorRow clothes, CharacterColorRow secondary = null) => sprites?.DrawOverworld(0, overworld, skin, clothes, secondary);
    }
 
@@ -437,8 +436,18 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
       /// <summary>The sentence above the previews.</summary>
       public string PreviewHint => HasSecondary
-         ? "The selected skin tone, clothes colour and secondary colour on the boy and the girl, painted the way the game paints them: walking around, on the trainer picture and from behind."
-         : "The selected skin tone and clothes colour on the boy and the girl, painted the way the game paints them: walking around, on the trainer picture and from behind.";
+         ? "The selected skin tone, clothes colour and secondary colour on the boy and the girl, painted the way the game paints them: in the overworld (facing down, up and left), on the trainer picture and from behind."
+         : "The selected skin tone and clothes colour on the boy and the girl, painted the way the game paints them: in the overworld (facing down, up and left), on the trainer picture and from behind.";
+
+      /// <summary>
+      /// The tab shows the colour lists on the left and the previews on the right when it is at least this wide (in device-independent pixels):
+      /// a list card is 440 wide plus margins, and the previews need about 400 to show the overworld frames and a trainer picture side by side.
+      /// Narrower, the previews go below the lists and the whole tab scrolls as one.
+      /// </summary>
+      public const double TwoColumnMinWidth = 880;
+
+      /// <summary>True if a tab this wide shows the lists and the previews side by side (each column scrolling on its own).</summary>
+      public static bool UseTwoColumns(double width) => !double.IsNaN(width) && width >= TwoColumnMinWidth;
 
       /// <summary>The sentence above the 'everything at a glance' grids.</summary>
       public string GlanceHint => HasSecondary

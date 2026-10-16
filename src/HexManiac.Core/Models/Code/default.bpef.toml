@@ -1049,7 +1049,7 @@ DefaultHash = '''23CC3A98'''
 [[NamedAnchors]]
 Name = '''graphics.trainers.sprites.back.throw'''
 Address = 0x331968
-Format = '''[titleTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter'''
+Format = '''[tileTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter'''
 DefaultHash = '''7DB38EA7'''
 	
 [[NamedAnchors]]

@@ -14,7 +14,18 @@ namespace HavenSoft.HexManiac.Core.Models {
    /// </para>
    /// </summary>
    public static class ModelEditStamp {
-      private static long current;
+      private static long current, runs;
+
+      /// <summary>
+      /// A counter for the runs (the formats) of the models only: it moves when a run is added, removed or replaced, and when a change is undone or data is loaded, but not when data bytes change.
+      /// Whatever depends on the formats of a ROM, but not on its data (which tables use a table, for example), can be kept until this number moves.
+      /// </summary>
+      public static long RunsCurrent => Interlocked.Read(ref runs) + 1;
+
+      public static void BumpRuns() {
+         Interlocked.Increment(ref runs);
+         Bump();
+      }
 
       /// <summary>The number as it is right now. Starts above zero, so a tab can use 0 or -1 for 'never looked'.</summary>
       public static long Current => Interlocked.Read(ref current) + 1;

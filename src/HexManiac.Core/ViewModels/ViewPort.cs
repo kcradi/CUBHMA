@@ -228,6 +228,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             // but needs to happen on the UI thread since it can update bound properties.
             dispatcher.BlockOnUIWork(() => {
                TabChangeRequestedEventArgs args;
+               if (arg is string aliasName && GotoAliases.FindAddress(Model, aliasName) is int aliasAddress && aliasAddress != Pointer.NULL) {
+                  // an entry of the original games that this ROM keeps in another table (CUBE: graphics.pokemon.sprites.front is the frontPic column of data.pokemon.stats)
+                  arg = aliasAddress;
+               }
                if (arg is string str) {
                   Log("Attempting to Goto Token: " + str);
                   if (str.StartsWith(EditorGotoPrefix, StringComparison.OrdinalIgnoreCase)) {
@@ -1136,6 +1140,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          InitializationWorkload = model.InitializationWorkload.ContinueWith(task => {
             var firstViewPort = changeHistory == null;
             if (firstViewPort) {
+               Map.GraphicsVariableSprites.RegisterParser(Model, Tools.CodeTool.ScriptParser); // the map editor looks for the sprites that scripts give to the graphics variables
                if (eventTemplate == null) eventTemplate = new EventTemplate(singletons?.WorkDispatcher ?? InstantDispatch.Instance, Model, Tools.CodeTool.ScriptParser, BlockMapViewModel.GetOverworldSpriteRenders(Model));
                CascadeScripts();
                ValidateMatchedWords();
@@ -1494,6 +1499,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          if (file.Name.ToLower().EndsWith(".hma")) {
             var edit = Encoding.Default.GetString(file.Contents);
             pathContext = Path.GetDirectoryName(Path.GetFullPath(file.Name));
+            history.ChangeCompleted(); // whatever was edited before is its own undo step: undo takes back the script, and only the script
             Edit(edit);
             return true;
          } else if (file.Name.ToLower().EndsWith(".ips")) {

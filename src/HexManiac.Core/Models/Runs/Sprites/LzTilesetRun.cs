@@ -45,7 +45,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Sprites {
       public LzTilesetRun(TilesetFormat format, IDataModel data, int start, SortedSpan<int> sources = null) : base(data, start, allowLengthErrors: format.AllowLengthErrors, sources) {
          TilesetFormat = format;
          var tileSize = format.BitsPerPixel * 8;
-         var uncompressedSize = data.ReadMultiByteValue(start + 1, 3);
+         var uncompressedSize = ReadDecompressedLength(data, start);
          var tileCount = uncompressedSize / tileSize;
          var roughSize = Math.Sqrt(tileCount);
          Width = (int)Math.Ceiling(roughSize);

@@ -288,7 +288,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          InitializationWorkload.Wait();
          RawData = newData;
          ClearCacheScope(); // all of the data is new, so nothing cached from the old data is valid
-         ModelEditStamp.Bump();
+         ModelEditStamp.BumpRuns();
       }
 
       public abstract void ObserveAnchorWritten(ModelDelta changeToken, string anchorName, IFormattedRun run);

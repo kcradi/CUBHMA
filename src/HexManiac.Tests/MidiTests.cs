@@ -886,6 +886,69 @@ t:
          Assert.Empty(tabErrors);
       }
 
+      /// <summary>Two voicegroups of 16 real instruments each: Unused (listed first) and Popular (the one both songs use). No All Instruments voicegroup.</summary>
+      private const int UnusedGroup = 0x800, PopularGroup = 0x900;
+      private void BuildWithoutBankButTwoBigVoicegroups() {
+         Build(named: false);
+         for (int i = 0; i < 16; i++) { WriteSquare(UnusedGroup + i * ToneSize, 1, i % 4); WriteSquare(PopularGroup + i * ToneSize, 2, i % 3); }
+         Model.ObserveAnchorWritten(Token, "sound.voicegroups.unused_group", new NoInfoRun(UnusedGroup));
+         Model.ObserveAnchorWritten(Token, "sound.voicegroups.popular_group", new NoInfoRun(PopularGroup));
+         for (int i = 0; i < headers.Length; i++) Model.WritePointer(Token, headers[i] + 4, PopularGroup);
+      }
+
+      [Fact]
+      public void Tab_WithoutBank_DefaultsToTheVoicegroupMostSongsUse_AndSaysThereIsNoBank() {
+         BuildWithoutBankButTwoBigVoicegroups();
+         var tab = CreateTab();
+         Assert.False(tab.HasAllInstruments);
+         Assert.Equal(PopularGroup, tab.SelectedVoicegroup.Address); // not the first one of the list
+         Assert.Contains(AllInstrumentsPatch.NoBankNote, tab.AllInstrumentsNote);
+         Assert.Contains("popular_group", tab.SelectedVoicegroup.Title);
+      }
+
+      [Fact]
+      public void Tab_InsertMidi_WithoutBank_UsesAnExistingVoicegroup_NeverDangles_AndSaysSo() {
+         BuildWithoutBankButTwoBigVoicegroups();
+         var tab = CreateTab();
+         FileSystem.OpenFile = (description, options) => Loaded("a.mid", Midi("single"));
+         tab.InsertAsNewSong = true;
+         tab.SelectedSong = tab.Songs[0];
+
+         tab.InsertSong.Execute(null);
+
+         Assert.Equal(3, SongCount);
+         Assert.Equal(PopularGroup, tab.Songs[2].Header.Voicegroup);
+         Assert.True(tab.Songs[2].Header.Voicegroup + 12 <= Model.Count);
+         Assert.Contains(AllInstrumentsPatch.NoBankNote, tab.Status);
+         Assert.Contains(AllInstrumentsPatch.NoBankNote, tabMessages.Last());
+         Assert.DoesNotContain(tabErrors, error => error.Contains("Could not"));
+      }
+
+      [Fact]
+      public void Tab_InsertMidi_WithoutBank_WhenTheUserPickedAVoicegroup_UsesThatOne_WithoutTheNote() {
+         BuildWithoutBankButTwoBigVoicegroups();
+         var tab = CreateTab();
+         FileSystem.OpenFile = (description, options) => Loaded("a.mid", Midi("single"));
+         tab.InsertAsNewSong = true;
+         tab.SelectedSong = tab.Songs[0];
+         tab.SelectedVoicegroup = tab.Voicegroups.Single(group => group.Address == UnusedGroup);
+
+         tab.InsertSong.Execute(null);
+
+         Assert.Equal(UnusedGroup, tab.Songs[2].Header.Voicegroup);
+         Assert.DoesNotContain(AllInstrumentsPatch.NoBankNote, tab.Status);
+      }
+
+      [Fact]
+      public void Tab_InsertMidi_WithoutAnyVoicegroupAtAll_SaysSoAndWritesNothing() {
+         SetFullModel(0xFF);
+         var tab = CreateTab(); // no song table: nothing to insert into
+         FileSystem.OpenFile = (description, options) => Loaded("a.mid", Midi("single"));
+         var before = Model.RawData.ToArray();
+         tab.InsertSong.Execute(null);
+         Assert.Equal(before, Model.RawData);
+      }
+
       [Fact]
       public void Tab_InsertMidi_WithoutAllInstruments_UsesTheSelectedVoicegroup() {
          Build(named: false);

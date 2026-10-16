@@ -1,4 +1,5 @@
 using HavenSoft.HexManiac.Core.Models;
+using HavenSoft.HexManiac.Core.Models.Code;
 using HavenSoft.HexManiac.Core.Models.Runs;
 using HavenSoft.HexManiac.Core.Models.Runs.Sprites;
 using HavenSoft.HexManiac.Core.ViewModels.DataFormats;
@@ -439,6 +440,40 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          }
       }
 
+      /// <summary>
+      /// How the map editor draws an object event whose graphics is a graphics variable (the View menu's choice, saved with the other settings).
+      /// Every map shows the same choice.
+      /// </summary>
+      public GraphicsVariableDisplay GraphicsVariableDisplay {
+         get => ObjectEventViewModel.GraphicsVariableDisplay;
+         set {
+            if (!Enum.IsDefined(typeof(GraphicsVariableDisplay), value)) value = GraphicsVariableDisplay.ScriptSprite;
+            if (value == ObjectEventViewModel.GraphicsVariableDisplay) return;
+            ObjectEventViewModel.GraphicsVariableDisplay = value;
+            NotifyPropertyChanged();
+            foreach (var tab in this) {
+               if (tab is MapEditorViewModel mapTab) mapTab.RefreshEventGraphics();
+            }
+         }
+      }
+
+      /// <summary>
+      /// How the script editor writes flags and variables: numbers (default, only the flags the ROM named on purpose keep their names)
+      /// or every define (View > Script Flags&amp;Vars, saved with the other settings).
+      /// </summary>
+      public ScriptNameDisplay ScriptNameDisplay {
+         get => ScriptArg.NameDisplay;
+         set {
+            if (!Enum.IsDefined(typeof(ScriptNameDisplay), value)) value = ScriptNameDisplay.Numbers;
+            if (value == ScriptArg.NameDisplay) return;
+            ScriptArg.NameDisplay = value;
+            NotifyPropertyChanged();
+            foreach (var tab in this) {
+               if (tab is IViewPort viewPort) viewPort.Tools.CodeTool.DataForCurrentRunChanged();
+            }
+         }
+      }
+
       private bool autoAdjustDataWidth = true;
       public bool AutoAdjustDataWidth { get => autoAdjustDataWidth; set => Set(ref autoAdjustDataWidth, value); }
 
@@ -578,6 +613,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             new DecapNames(),
             new ApplyCFRUPatch { Editor = this },
             new ApplyCubePatch(this),
+            new ApplyCubeOptimization(this, fileSystem),
+            new UpdateCube(this, fileSystem),
             new OpenSpriteGallery(),
             new OpenSoundEditor(),
             new OpenAnimatedTiles(),
@@ -647,6 +684,15 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          useHardwareAcceleration = GraphicsSettings.IsEnabled(metadata, GraphicsSettings.UseHardwareAccelerationSetting);
          var collisionGridLine = metadata.FirstOrDefault(line => line.StartsWith("CollisionGridOpacity = "));
          if (collisionGridLine != null && int.TryParse(collisionGridLine.Split('=').Last().Trim(), out var collisionGridOpacity)) BlockMapViewModel.CollisionGridOpacity = collisionGridOpacity;
+         // a settings file from before this choice existed has no line: the script sprite is the default
+         var graphicsVariableLine = metadata.FirstOrDefault(line => line.StartsWith("GraphicsVariableDisplay = "));
+         if (graphicsVariableLine != null && int.TryParse(graphicsVariableLine.Split('=').Last().Trim(), out var graphicsVariableDisplay) && Enum.IsDefined(typeof(GraphicsVariableDisplay), graphicsVariableDisplay)) {
+            ObjectEventViewModel.GraphicsVariableDisplay = (GraphicsVariableDisplay)graphicsVariableDisplay;
+         }
+         // a settings file from before this choice existed has no line: numbers are the default
+         var scriptNameLine = metadata.FirstOrDefault(line => line.StartsWith("ScriptNameDisplay = "));
+         ScriptArg.NameDisplay = scriptNameLine != null && int.TryParse(scriptNameLine.Split('=').Last().Trim(), out var scriptNameDisplay) && Enum.IsDefined(typeof(ScriptNameDisplay), scriptNameDisplay)
+            ? (ScriptNameDisplay)scriptNameDisplay : ScriptNameDisplay.Numbers;
          AutoAdjustDataWidth = !metadata.Contains("AutoAdjustDataWidth = False");
          StretchData = !metadata.Contains("StretchData = False");
          IsNewVersionAvailable = metadata.Contains("IsNewVersionAvailable = True");
@@ -695,6 +741,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             GraphicsSettings.SettingLine(GraphicsSettings.UseDedicatedGraphicsSetting, UseDedicatedGraphics),
             GraphicsSettings.SettingLine(GraphicsSettings.UseHardwareAccelerationSetting, UseHardwareAcceleration),
             $"CollisionGridOpacity = {CollisionGridOpacity}",
+            $"GraphicsVariableDisplay = {(int)GraphicsVariableDisplay}",
+            $"ScriptNameDisplay = {(int)ScriptNameDisplay}",
             $"AutoAdjustDataWidth = {AutoAdjustDataWidth}",
             $"StretchData = {StretchData}",
             $"AllowMultipleElementsPerLine = {AllowMultipleElementsPerLine}",
@@ -871,10 +919,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          _ => null,
       };
 
-      /// <summary>Asks the "Apply CUBE" menu item again whether it can run: the open ROM may just have been edited, or saved, or restored by undo.</summary>
+      /// <summary>Asks the "Apply CUBE" and "Apply CUBE optimization" menu items again whether it can run: the open ROM may just have been edited, or saved, or restored by undo.</summary>
       private void RefreshApplyCubeAvailability() {
          foreach (var edit in QuickEditsMisc) {
-            if (edit is ApplyCubePatch) edit.TabChanged();
+            if (edit is ApplyCubePatch or ApplyCubeOptimization or UpdateCube) edit.TabChanged();
          }
       }
 
@@ -913,18 +961,33 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
                new HardcodeTablesModel(Singletons, file.Contents, metadata) :
                new PokemonModel(file.Contents, metadata, Singletons);
             var viewPort = new ViewPort(file.Name, model, workDispatcher, Singletons, MapTutorials, FileSystem, PythonTool);
-            if (metadata.IsEmpty || StoredMetadata.NeedVersionUpdate(metadata.Version, Singletons.MetadataInfo.VersionNumber)) {
-               _ = viewPort.Model.InitializationWorkload.ContinueWith(task => {
+            var rewriteMetadata = metadata.IsEmpty || StoredMetadata.NeedVersionUpdate(metadata.Version, Singletons.MetadataInfo.VersionNumber);
+            _ = viewPort.Model.InitializationWorkload.ContinueWith(task => {
+               var log = viewPort.Tools?.LogTool?.LogMessages;
+               if (rewriteMetadata) {
+                  // the TOML is rewritten with the current version number, so the upgrade doesn't run again next time.
+                  // if some of its anchors could not be loaded, the rewritten TOML won't have them: keep a copy of the original next to it first.
+                  if (model is PokemonModel loaded && loaded.MissingStoredAnchors.Count > 0 && metadataText.Length > 0) {
+                     var backupName = MetadataBackupName(file.Name, metadata.Version);
+                     if (fileSystem.SaveMetadata(backupName, metadataText)) log?.Add($"Metadata: {loaded.MissingStoredAnchors.Count} anchor(s) of the TOML could not be loaded. The original TOML was copied to {backupName}.toml before updating it.");
+                  }
                   if (!Singletons.GameReferenceTables.TryGetValue(model.GetGameCode(), out var refTable)) refTable = null;
                   fileSystem.SaveMetadata(file.Name, viewPort.Model.ExportMetadata(refTable, Singletons.MetadataInfo).Serialize());
                   Debug.Assert(viewPort.ChangeHistory.IsSaved, "Put a breakpoint in ChangeHistory.CurrentChange, because a changable token is being created too soon!");
-                  if (model is HardcodeTablesModel hardcode) viewPort.Tools?.LogTool?.LogMessages.AddRange(hardcode.LoadingMessages);
-               }, TaskContinuationOptions.ExecuteSynchronously);
-            }
+               }
+               if (model is PokemonModel pokemonModel && pokemonModel.LoadingMessages.Count > 0) log?.AddRange(pokemonModel.LoadingMessages);
+            }, TaskContinuationOptions.ExecuteSynchronously);
             Add(viewPort);
          } catch (IOException ex) {
             ErrorMessage = ex.Message;
          }
+      }
+
+      /// <summary>The name (without the .toml extension) for the copy of a TOML that is kept before an older version's TOML is rewritten.</summary>
+      public static string MetadataBackupName(string romFileName, string tomlVersion) {
+         var baseName = romFileName.ToLower().EndsWith(".gba") ? romFileName.Substring(0, romFileName.Length - 4) : romFileName;
+         var version = string.IsNullOrEmpty(tomlVersion) ? "old" : new string(tomlVersion.Where(c => char.IsLetterOrDigit(c) || c == '.' || c == '-').ToArray());
+         return $"{baseName}.backup-v{version}";
       }
 
       private void ImplementFindCommands() {

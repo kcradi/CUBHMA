@@ -187,6 +187,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
          foreach (var map in VisibleMaps) map.ClearPixelCache();
       }
 
+      /// <summary>Draw the events again after the View menu changed how graphics-variable events look.</summary>
+      public void RefreshEventGraphics() {
+         foreach (var map in VisibleMaps) map.RefreshEventGraphics();
+      }
+
       private int collisionIndex = -1;
       public int CollisionIndex {
          get => collisionIndex;

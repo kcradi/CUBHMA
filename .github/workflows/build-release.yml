@@ -68,16 +68,18 @@ jobs:
             test-output.txt
           if-no-files-found: ignore
 
+      - name: Write the release text
+        shell: pwsh
+        run: |
+          $notes = Get-Content RELEASE_NOTES.md -Raw
+          $failed = if (Test-Path failed-tests.txt) { (Get-Content failed-tests.txt) -join "`n" } else { "" }
+          "$notes`n`nUnit tests: $env:TEST_SUMMARY`n$failed" | Out-File -FilePath release-body.md -Encoding utf8
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           target_commitish: ${{ github.sha }}
           tag_name: v${{ env.VERSION }}
           name: CUBHMA ${{ env.VERSION }}
-          body: |
-            CUBHMA - Cradi's Unofficial Build of Hex Maniac Advance: a performance-tuned Hex Maniac Advance with extra editors for pokeemerald-expansion. Works best with Cradi's Ultimate Build of Emerald (CUBE).
-            Download the zip below, extract it anywhere, and run `HexManiacAdvance.exe`.
-
-            Unit tests: ${{ env.TEST_SUMMARY }}
-            ${{ env.FAILED_TESTS }}
+          body_path: release-body.md
           files: CUBHMA_x64.*.zip

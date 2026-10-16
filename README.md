@@ -1,4 +1,4 @@
-# CUBHMA
+# CUBHMA 0.7.2
 
 **CUBHMA** (Cradi's Unofficial Build of Hex Maniac Advance) is the official home of Cradi's fork of [Hex Maniac Advance](https://github.com/haven1433/HexManiacAdvance). It keeps everything the regular HMA does and adds a faster core plus a set of extra editors for pokeemerald-expansion projects.
 
@@ -27,6 +27,38 @@
 * Main-menu icons for the new sections.
 * Support for pokeemerald-expansion data layouts.
 
+**Wild Pokemon, Pokedex and map editor**
+* Wild Pokemon editor: tab straight from level to level (the number is selected automatically), plus **Copy table / Paste table** buttons that use the classic plain-text format.
+* New per-map **Overworld wild Pokemon** checkbox (on by default for CUBE): wild Pokemon walk around the map and only walking into one starts a battle.
+* **Reorder Pokedex** now works on CUBE for both the regional and the national dex.
+* View > **Map Editor GFX Variable Events**: choose how GFX-variable events draw (sprite found in the map scripts, blacked-out "?" sprite, regular "?", or the first Pokemon icon).
+* Character Customization shows its previews on the right, with only the standing down / up / left frames.
+* Goto menu entries from the original HMA (for example `graphics.pokemon.type.icons`) now resolve on CUBE as well.
+* Older CUBE .toml files always keep working: the version upgrade never replaces CUBE's tables or groups, so moves stay names and the trainer editor keeps its fields.
+* Utilities > Misc > **Apply CUBE optimization...** re-compresses the graphics of an existing CUBE ROM in place (grayed out on an already optimized CUBE).
+* Utilities > Misc > **Update CUBE** moves a ROM that you already hacked (made from any earlier CUBE round) onto the current CUBE. The tab becomes the current CUBE with all of its new features, and what you changed is carried over: edits in tables (stats, moves, trainers, items...), names and text, maps and their scripts, sprites and palettes, rows you added at the end of tables, and new data of yours, which is moved to free space and repointed. It asks once for the original Pokemon Emerald (USA, Europe) ROM, finds out which CUBE version your ROM comes from (an unknown ROM is refused), and ends with a report of what was carried over and what was not. Old `.toml` files work: tables that your metadata does not know are taken from the new CUBE. Nothing is saved until you choose File > Save (or Save As to keep your old ROM). Changes to the game's code (assembly/C hacks) are not carried over. The list of known versions is `resources/cube_versions.fp`.
+
+**Scripts, Intro Manager and CUBE gameplay options**
+* **Utilities > Scripts** opens the HMA scripts folder. The `CUBE` folder inside has an `_ON` and `_OFF` script for each CUBE option (the header of each script says what ON and OFF mean), and an Enable / Disable pair for character customization; open (or drop) one on your CUBE ROM:
+  * **EXP All**: Exp. Share becomes a key item and party members that did not battle still get 20% EXP (change the percent on the `@cube.scripts.config+1 20` line, or in Goto > Scripts > EXP Share, shown only while EXP All is on).
+  * **Evolution use items** (`CUBE_EvolutionUseItems_ON` / `_OFF`): King's Rock, Metal Coat, Dragon Scale and the other held evolution items evolve a Pokemon straight from the bag.
+  * **Reusable TMs** (`CUBE_ReusableTMs_ON` / `_OFF`): TMs are not used up when they teach a move (like the HMs). Off by default, as in the normal game.
+  * **Character customization**: Enable / Disable (enabled by default). These are two scripts, `CUBE_CharacterCustomization_Enable` and `CUBE_CharacterCustomization_Disable`; run the other one to undo.
+  * **Randomizer menu on New Game** (off by default): randomize Pokemon, moves, abilities and types, with a seed.
+  * **Level cap**: 10 caps tied to the flags `FLAG_CUBE_LEVEL_CAP_1` to `_10` (0x900-0x909); type those names (or `CUBELEVELCAP1`) in scripts. While a cap's flag is set that level is the maximum and a Pokemon at the cap gains no EXP. The level cap is off by default; Goto > Scripts > Level Cap (flags and levels) only appears while the Level cap script is on.
+  * The scripts and Goto entries also work on a CUBE ROM you modified and saved with an older .toml: CUBHMA finds the tables in the ROM.
+* **EXP All** (script): the Exp. Share key item switches the system on and off each time you use it from the bag (or its SELECT shortcut); eggs never gain EXP. **Level cap** is off by default, and its Goto entry only appears while the Level cap script is on.
+* **Randomizer menu**: uses the text box frame, with the real button pictures drawn dark on the white window; Birch's bag now shows the randomized starters.
+* **DexNav** is a line on the overworld START menu right below the Bag (shown while the DexNav key item is in the bag) instead of a PokeNav row. The "try moving more slowly" check is gone: you may walk, run or bike to the Pokemon. The DexNav bag icon is Cradi's own.
+* View > **Script Flags&Vars** (below Graphics): *Display numbers* (default) shows flags and variables as numbers, except the flags that were named on purpose (level caps, gym badges, the Pokemon / Pokedex / PokeNav start menu entries and every battle flag such as Dynamax); *Display defines* shows every flag and variable by its FLAG_ / VAR_ name.
+* The General MIDI instrument bank ("All Instruments") is gone from CUBE: the Sound tab then imports MIDI songs with an instrument set of the game and says so.
+* **Intro Manager**: the cards use the whole window, and a new *New game spawn* card sets the map and X/Y the player starts on, with a button to remove the truck shaking.
+* **OW Sprites**: the player's running (sprint) pictures are shown and editable for both genders.
+* Goto > Graphics > Pokemon > Type > Icons opens the CUBE type icon sheet as an editable image.
+* The Wild Pokemon editor opens and updates faster.
+
+**CUBE features that go with it:** a **DexNav** key item (adds a DexNav line to the START menu), overworld wild Pokemon, trainer Tera / Dynamax from the team editor (`* tera=Fire`, `* dynamax=yes`).
+
 **Tools**
 * *Apply CUBE to a vanilla Emerald ROM...* creates CUBE from your own Emerald ROM using a built-in BPS patch and the CUBE metadata.
 
@@ -40,245 +72,6 @@
 
 ![Sound](docs/images/sound.png)
 
-## Battle options in CUBE
-
-### Turning battle triggers on (scripts)
-
-Set these from a map script with `setflag FLAG_NAME` and turn them off with `clearflag FLAG_NAME`. They stay set until you clear them.
-
-| What you want | Flag | ID |
-|---|---|---|
-| Player can Terastallize | `FLAG_TERA_ORB_CHARGED` (also needs the Tera Orb in the bag) | 0x1154 |
-| Tera Orb never runs out | `FLAG_TERA_ORB_NO_COST` | 0x1153 |
-| Player can Dynamax | `FLAG_DYNAMAX_BATTLE` (also needs the Dynamax Band in the bag) | 0x1155 |
-| Wild Pokémon use smart AI (needed for wild Tera / Dynamax) | `FLAG_SMART_WILD_AI` | 0x1159 |
-| Every wild encounter is a double battle | `FLAG_FORCE_DOUBLE_WILD` | 0x115A |
-| No random wild encounters | `FLAG_NO_WILD_ENCOUNTERS` | 0x115B |
-| Can't catch wild Pokémon | `FLAG_NO_CATCHING` | 0x115C |
-| Can't run from wild battles | `FLAG_NO_RUNNING` | 0x115D |
-| Inverse battle (type chart flipped) | `FLAG_INVERSE_BATTLE` | 0x1156 |
-| Sky Battle | `FLAG_SKY_BATTLE` | 0x114F |
-| Sleep clause | `FLAG_SLEEP_CLAUSE` | 0x1152 |
-| No white-out against Trainers | `FLAG_NO_WHITEOUT` | 0x1151 |
-| Guaranteed shiny encounters | `FLAG_FORCE_SHINY` | 0x1158 |
-| Never shiny | `FLAG_FORCE_NO_SHINY` | 0x1157 |
-| Trainers don't spot you | `FLAG_NO_TRAINER_SEE` | 0x114C |
-| AI plays your Pokémon | `FLAG_AI_VS_AI_BATTLE` | 0x1150 |
-| Disable the bag in battle | `VAR_NO_BAG_USE` (a var; use `setvar`) | 0x437F |
-
-### Giving trainers Tera, Dynamax, Mega and Z-Moves (Trainer editor)
-
-Open **Goto → Trainers**, pick the trainer, and edit the **Team** box. Put the options on their own line under the Pokémon's moves. **The line must start with `* `** or it is ignored.
-
-```
-50 Charizard (IVs=31)
-- Flamethrower
-- Air Slash
-- Roost
-- Solar Beam
-* tera=Fire
-```
-
-| Gimmick | What to type | Needs |
-|---|---|---|
-| **Terastallize** | `* tera=Fire` (any type except Normal) | Nothing else. No orb or flag. |
-| **Dynamax** | `* dynamax=yes` | Nothing else. No band or flag. |
-| **Gigantamax** | `* gmax=yes` (also makes it Dynamax) | A Pokémon that has a Gigantamax form |
-| **Dynamax strength** | `* dmaxlevel=10` (0–10; also makes it Dynamax) | Nothing else |
-| **Mega Evolution** | Give the Pokémon its Mega Stone as the held item (`@"Charizardite X"`) | Nothing else. No ring. |
-| **Z-Move** | Give the Pokémon its Z-Crystal as the held item | Nothing else. No ring. |
-
-You can combine options on one line: `* tera=Fire nature=Timid` or `* dynamax=yes dmaxlevel=10`.
-
-Notes:
-- A Pokémon uses only one gimmick per battle. A Pokémon holding a Mega Stone or Z-Crystal can't Dynamax.
-- A trainer can only Dynamax once per battle.
-- Without a "smart Tera" AI flag, trainers Terastallize on the first turn. With it (`smartTera` in the trainer's AI flags), they pick a better moment.
-- Pasting a Showdown or `.party` team also works: `Tera Type: Fire`, `Dynamax: Yes`, `Dynamax Level: 10`.
-
-CUBHMA is based on Hex Maniac Advance made by haven
-CUBE uses resources from pret's pokeemerald decomp and ROM Hacking Hideout's pokeemerald-expansion, view the full list of credits here:
-
-GriffinR
-DizzyEggg
-PikalaxALT
-Diegoisawesome
-Kermalis
-Marcus Huderle
-YamaArashi
-Phlosioneer
-scnorton
-Kurausukun
-Eduardo Quezada
-PokeCodec
-garak
-golem galvanize
-Martin Griffin
-ProjectRevoTPP
-Slawter666
-luckytyphlosion
-KDSKardabox
-huderlem
-LOuroboros
-Sewef
-camthesaxman
-N
-Sierra A
-jiangzhengwenjz
-Deokishisu
-MCboy
-Melody
-Sierraffinity
-tustin2121
-yenatch
-hondew
-AZero13
-U-User-PC\User
-itskobold
-ExpoSeed
-ultima-soul
-sphericalice
-cbt6
-kiliwily
-Cameron Hall
-SphericalIce
-Bassoonian
-SatoMew
-Meowsy
-Michael Panzlaff
-Tetrable
-nullableVoidPtr
-DavidJCobb
-Fontbane
-Jaizu
-Tustin2121
-sbird
-AsparagusEduardo
-Frank
-Kaz
-shinyquagsire23
-Icedude907
-aaaaaa123456789
-gAlfonso-bit
-Avara
-Edouard Veyrier
-Thomas Winwood
-cawtds
-garakmon
-Abaresk
-Ariel Antonitis
-Colton G. Rushton
-Devin
-Eduardo Quezada D'Ottone
-Estellar
-Garak
-PlatinumMaster
-AJ Fontaine
-FosterProgramming
-Philipp AUER
-Raymond Dodge
-opakedragon
-psf
-sceptillion
-sneed
-Alex
-Anders Løvig
-Josh
-NT_x86
-brain_face
-pi1024e
-shinny456
-EternalCode
-Hedara
-Simply BLG
-Zunawe
-froggestspirit
-hedara90
-hjk321
-kaboissonneault
-mitsunee
-pkmnsnfrn
-shachar700
-vblm12
-Evan
-Flametix
-Pokestia
-Remy Oukaour
-Revo
-SBird
-Sebastian Gabl
-ShinyDragonHunter
-WhenGryphonsFly
-adrianrfreedman
-kittenchilly
-leo60228
-xenonnsmb
-AnonymousRandomPerson
-Jademalo
-Jan Helbling
-Jefferson Steelflex
-MandL27
-MeatLoaf3
-Missingmew
-Ryuhouji
-Sahith Nallapareddy
-Scyrous
-Seth Barberee
-Skye Chappelle
-SnorlaxMonster
-Wiz
-kageru
-laqieer
-mid-kid
-mike-goutokuji
-Alex Nash
-AlexOn1ine
-Andrea Jemmett
-Ashley Coleman
-BlackShark
-Catnip-Consumer
-Collin Styles
-Eldred Habert
-Flit
-Frank DeBlasio
-Frogg
-Gudf
-HornedCrusader
-IIMarckus
-Isaac Aronson
-Jamie Foster
-Kevin Mills
-Kildemal
-Lactozilla
-Marky
-Mitsunee
-PALPATlNE
-PSF
-Papa Cancer
-PokeCF
-Rangi
-RavePossum
-Rose
-Scott
-Seija
-SiliconA-Z
-Tim Gates
-William Jackson
-Wyrserth
-abcboy101
-aichiya
-aueuaio
-citrusbolt
-einstein95
-ghoulslash
-grunt-lucas
-gruxor
-marlux895
-melthelesbian
-pokballs
-pokemonmasteraaron
-quocmanh94
-surtr-games
 ---
 
 ## Original Hex Maniac Advance README

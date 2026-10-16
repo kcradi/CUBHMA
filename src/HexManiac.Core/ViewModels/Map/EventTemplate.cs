@@ -422,7 +422,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
 
       #region Expansion trainer data
 
-      // the expansion's species ids follow the national dex, so the species id is also the national dex number
+      // the expansion's species ids start out following the national dex, but the dex can be reordered: the species table's 'dexNumber' is the real national number
       private List<int> GetExpansionPokemonPool() {
          const int ChosenTypeOddsMultiplier = 100;
          var stats = model.GetTableModel(HardcodeTablesModel.PokemonStatsTable);
@@ -431,9 +431,12 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
 
          // which species may appear: the first maxPokedex of the regional (hoenn) dex or of the national dex
          IEnumerable<int> candidates;
-         var hoenn = model.GetTableModel("data.pokedex.hoennToNational");
-         if (!useNationalDex && hoenn != null) {
-            candidates = Enumerable.Range(0, Math.Min(maxPokedex, hoenn.Count)).Select(i => hoenn[i].GetValue(0));
+         var hoenn = ExpansionDex.ReadRegional(model);
+         var byNational = ExpansionDex.SpeciesByNational(model);
+         if (!useNationalDex && hoenn.Length > 0) {
+            candidates = hoenn.Take(maxPokedex).Select(national => ExpansionDex.SpeciesForNational(byNational, national));
+         } else if (byNational.Count > 0) {
+            candidates = Enumerable.Range(1, Math.Max(0, Math.Min(maxPokedex, byNational.Keys.Max()))).Select(national => ExpansionDex.SpeciesForNational(byNational, national));
          } else {
             candidates = Enumerable.Range(1, Math.Min(maxPokedex, stats.Count - 1));
          }

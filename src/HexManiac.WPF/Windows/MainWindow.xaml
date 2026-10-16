@@ -216,6 +216,28 @@
                      <MenuItem Header="75%" Tag="75" IsCheckable="True" Click="CollisionGridOpacityClick"/>
                      <MenuItem Header="100%" Tag="100" IsCheckable="True" Click="CollisionGridOpacityClick"/>
                   </MenuItem>
+                  <MenuItem Header="Map Editor _GFX Variable Events" SubmenuOpened="GraphicsVariableDisplayMenuOpened">
+                     <MenuItem Header="Sprite from the scripts (default)" Tag="0" IsCheckable="True" Click="GraphicsVariableDisplayClick"/>
+                     <MenuItem Header="Blacked-out sprite with a question mark" Tag="1" IsCheckable="True" Click="GraphicsVariableDisplayClick"/>
+                     <MenuItem Header="Question mark" Tag="2" IsCheckable="True" Click="GraphicsVariableDisplayClick"/>
+                     <MenuItem Header="First Pokemon icon" Tag="3" IsCheckable="True" Click="GraphicsVariableDisplayClick"/>
+                  </MenuItem>
+                  <MenuItem Header="Script _Flags&amp;Vars" SubmenuOpened="ScriptNameDisplayMenuOpened">
+                     <MenuItem Header="Display numbers (default)" Tag="0" IsCheckable="True" Click="ScriptNameDisplayClick">
+                        <MenuItem.ToolTip>
+                           <ToolTip BorderThickness="0" Background="{DynamicResource Backlight}">
+                              <TextBlock Text="Flags and variables are numbers. The flags that were named on purpose (level caps, badges, start menu entries, battle options) keep their names."/>
+                           </ToolTip>
+                        </MenuItem.ToolTip>
+                     </MenuItem>
+                     <MenuItem Header="Display defines" Tag="1" IsCheckable="True" Click="ScriptNameDisplayClick">
+                        <MenuItem.ToolTip>
+                           <ToolTip BorderThickness="0" Background="{DynamicResource Backlight}">
+                              <TextBlock Text="Every flag and variable is shown by the name it has in the game's source (FLAG_... / VAR_...)."/>
+                           </ToolTip>
+                        </MenuItem.ToolTip>
+                     </MenuItem>
+                  </MenuItem>
                   <MenuItem Header="_Graphics">
                      <MenuItem Header="Use _dedicated graphics card (restart needed)" IsCheckable="True" IsChecked="{Binding UseDedicatedGraphics}">
                         <MenuItem.ToolTip>

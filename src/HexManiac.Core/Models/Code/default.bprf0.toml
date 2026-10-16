@@ -361,7 +361,7 @@ Format = '''[palette<`lzp4`> index: unused:]graphics.trainers.sprites.front'''
 [[NamedAnchors]]
 Name = '''graphics.trainers.sprites.back.throw'''
 Address = 0x2583A0
-Format = '''[titleTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter'''
+Format = '''[tileTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter'''
 
 [[NamedAnchors]]
 Name = '''graphics.trainers.coordinates.back'''

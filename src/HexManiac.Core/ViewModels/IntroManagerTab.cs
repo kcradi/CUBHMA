@@ -340,6 +340,130 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
    }
 
    /// <summary>
+   /// The 'New game spawn' card: the map, X and Y where the player appears after the speech, and whether the truck shakes. It edits gCubeNewGameSpawn of CUBE
+   /// (<see cref="CubeNewGameSpawnTable"/>); a ROM without that table gets a disabled card with a message.
+   /// </summary>
+   public class IntroSpawnEditor : ViewModelCore {
+      private readonly IntroManagerTab tab;
+
+      public string Title => "New game spawn";
+      public string Description => "Where the player appears after the Birch speech. The default is the moving truck.";
+      public const string NeedsCubeMessage = "This needs the latest CUBE: this ROM has no new game spawn table, so there is nothing to change here.";
+
+      public IntroOptionList Maps { get; } = new();
+
+      private bool isAvailable;
+      public bool IsAvailable { get => isAvailable; private set { if (TryUpdate(ref isAvailable, value)) NotifyPropertyChanged(nameof(IsUnavailable)); } }
+      public bool IsUnavailable => !isAvailable;
+      public string UnavailableMessage => NeedsCubeMessage;
+
+      private CubeNewGameSpawn current = CubeNewGameSpawn.Original;
+      public CubeNewGameSpawn Current => current;
+
+      private string xText = "-1", yText = "-1";
+      public string XText { get => xText; set => SetCoordinate(ref xText, value, "X", nameof(XText), (spawn, number) => spawn with { X = number }); }
+      public string YText { get => yText; set => SetCoordinate(ref yText, value, "Y", nameof(YText), (spawn, number) => spawn with { Y = number }); }
+
+      public bool ShakeTruck => current.ShakeTruck;
+      public string ShakeLabel => current.ShakeTruck ? "The truck shakes" : "The truck does not shake";
+      public string ToggleShakeText => current.ShakeTruck ? "Remove truck shaking" : "Restore truck shaking";
+
+      private string status = string.Empty;
+      public string Status { get => status; private set { if (TryUpdate(ref status, value)) NotifyPropertyChanged(nameof(HasStatus)); } }
+      public bool HasStatus => status.Length > 0;
+      private bool statusIsError;
+      public bool StatusIsError { get => statusIsError; private set => Set(ref statusIsError, value); }
+
+      public string Details => CubeNewGameSpawnTable.Find(tab.Model) is var address && address != -1
+         ? $"X and Y are tile coordinates (-32768 to 32767); -1 and -1 is the default of the truck. Stored at {address:X6}."
+         : string.Empty;
+
+      public ICommand Reset { get; }
+      public ICommand ToggleShake { get; }
+      public ICommand ShowInMainTab { get; }
+
+      public IntroSpawnEditor(IntroManagerTab tab) {
+         this.tab = tab;
+         Maps.SetOptions(BuildMapOptions(tab.Model));
+         Maps.UserSelected += (sender, option) => Change(spawn => spawn with { MapGroup = option.Value / 256, MapNum = option.Value % 256 });
+         Reset = new StubCommand { CanExecute = arg => isAvailable && current != CubeNewGameSpawn.Original, Execute = arg => Change(spawn => CubeNewGameSpawn.Original) };
+         ToggleShake = new StubCommand { CanExecute = arg => isAvailable, Execute = arg => Change(spawn => spawn with { ShakeTruck = !spawn.ShakeTruck }) };
+         ShowInMainTab = new StubCommand { CanExecute = arg => isAvailable, Execute = arg => tab.ShowInMainTab(CubeNewGameSpawnTable.Find(tab.Model)) };
+         Reload();
+      }
+
+      /// <summary>The value of a map in the list: group * 256 + map number.</summary>
+      public static int MapValue(int group, int map) => group * 256 + map;
+
+      /// <summary>Every map of the ROM as "Littleroot Town (0.9)". An empty list (a ROM whose map tables can't be read) is fine: the chosen map is then shown as "Map 25.40".</summary>
+      public static List<IntroOption> BuildMapOptions(IDataModel model) {
+         var options = new List<IntroOption>();
+         try {
+            var lookup = new HavenSoft.HexManiac.Core.ViewModels.Map.MapNameLookup(model);
+            var banks = HavenSoft.HexManiac.Core.Models.Map.AllMapsModel.Create(model);
+            for (int group = 0; group < banks.Count && group < 256; group++) {
+               var bank = banks[group];
+               if (bank == null) continue;
+               for (int map = 0; map < bank.Count && map < 256; map++) {
+                  var full = lookup.Text(group, map);
+                  var suffix = $".{group}-{map}";
+                  var name = full.EndsWith(suffix) ? full.Substring(0, full.Length - suffix.Length) : string.Empty;
+                  if (name.Length == 0 || full == $"{group}-{map}") name = "Map";
+                  options.Add(new IntroOption(MapValue(group, map), $"{name} ({group}.{map})"));
+               }
+            }
+         } catch (Exception) {
+            // no readable map tables: the list stays as far as it got
+         }
+         return options;
+      }
+
+      /// <summary>Reads the table again and shows it.</summary>
+      public void Reload() {
+         var spawn = CubeNewGameSpawnTable.Read(tab.Model);
+         IsAvailable = spawn != null;
+         current = spawn ?? CubeNewGameSpawn.Original;
+         Maps.Select(MapValue(current.MapGroup, current.MapNum), number => $"Map {number / 256}.{number % 256}");
+         xText = current.X.ToString();
+         yText = current.Y.ToString();
+         NotifyPropertyChanged(nameof(XText));
+         NotifyPropertyChanged(nameof(YText));
+         NotifyPropertyChanged(nameof(ShakeTruck));
+         NotifyPropertyChanged(nameof(ShakeLabel));
+         NotifyPropertyChanged(nameof(ToggleShakeText));
+         NotifyPropertyChanged(nameof(Details));
+         if (!isAvailable) { Status = string.Empty; StatusIsError = false; }
+         else if (!current.IsTruck && (current.X < 0 || current.Y < 0)) {
+            Status = "This map starts the player at a negative position, which is outside the map. Type the X and Y of a tile to start on.";
+            StatusIsError = true;
+         } else if (current != CubeNewGameSpawn.Original) {
+            Status = current.IsTruck ? "Changed. 'Back to the original' puts the truck back." : "Changed. The new game starts on this map without the truck scene.";
+            StatusIsError = false;
+         } else { Status = string.Empty; StatusIsError = false; }
+         (Reset as StubCommand)?.RaiseCanExecuteChanged();
+         (ToggleShake as StubCommand)?.RaiseCanExecuteChanged();
+         (ShowInMainTab as StubCommand)?.RaiseCanExecuteChanged();
+      }
+
+      private void SetCoordinate(ref string field, string value, string name, string property, Func<CubeNewGameSpawn, int, CubeNewGameSpawn> apply) {
+         value = (value ?? string.Empty).Trim();
+         if (value == field) return;
+         if (!isAvailable) { NotifyPropertyChanged(property); return; }
+         if (!int.TryParse(value, out var number) || number < short.MinValue || number > short.MaxValue) {
+            tab.ReportError($"'{value}' is not a valid {name}: type a whole number from {short.MinValue} to {short.MaxValue}.");
+            NotifyPropertyChanged(property);
+            return;
+         }
+         Change(spawn => apply(spawn, number));
+      }
+
+      private void Change(Func<CubeNewGameSpawn, CubeNewGameSpawn> change) {
+         if (!isAvailable) return;
+         tab.WriteSpawn(this, change(current));
+      }
+   }
+
+   /// <summary>
    /// The Intro Manager: what happens at the start of a new game. Choose the Pokémon of the professor's speech from a list, the music of the title screen and of the speech from a list of songs,
    /// and the picture of the professor. Works on Emerald, FireRed and the games made from them. Every change is a real change of the ROM and a normal undo step.
    /// </summary>
@@ -414,6 +538,9 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public IntroSettingEditor TitleMusic { get; private set; }
       public IntroSettingEditor TitleCry { get; private set; }
       public IntroPictureEditor Picture { get; private set; }
+      public IntroSpawnEditor Spawn { get; private set; }
+      /// <summary>Everything the tab shows as a card, in the order of the cards: the Pokémon, the professor's picture, the music, the title cry, the spawn. The view lays them out side by side.</summary>
+      public IReadOnlyList<object> Cards { get; private set; } = Array.Empty<object>();
       public IReadOnlyList<IntroSettingEditor> MusicEditors { get; private set; } = Array.Empty<IntroSettingEditor>();
       public IReadOnlyList<IntroSettingEditor> Editors { get; private set; } = Array.Empty<IntroSettingEditor>();
 
@@ -421,6 +548,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public bool HasMusic => MusicEditors.Count > 0;
       public bool HasTitleCry => TitleCry != null;
       public bool HasPicture => Picture != null;
+      /// <summary>The spawn card is shown for Emerald-based games (it is disabled with a message when the ROM has no spawn table).</summary>
+      public bool HasSpawn => Spawn != null;
       public bool Found => Manager.Found;
       public bool NotFound => !Manager.Found;
       public string NotFoundMessage => IntroManager.UnsupportedMessage;
@@ -483,6 +612,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             Picture = new IntroPictureEditor(this, Manager.Picture, model);
             Picture.Capture(data);
          }
+         if (Manager.Found && Manager.Game != IntroGame.FireRed) Spawn = new IntroSpawnEditor(this);
+         Cards = new object[] { Species, Picture, ProfessorMusic, TitleMusic, TitleCry, Spawn }.Where(card => card != null).ToList();
          foreach (var choice in IntroPictureSources.Pokemon(model)) pokemonPictures[choice.Index] = choice;
          Species?.Reload(data);
          TitleCry?.Reload(data);
@@ -501,6 +632,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var data = model.RawData;
          foreach (var editor in Editors) editor.Reload(data);
          Picture?.Reload(data);
+         Spawn?.Reload();
       }
 
       /// <summary>The front picture of a Pokémon for the previews, or null.</summary>
@@ -531,6 +663,22 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          Reload();
          var now = editor.Options.Find(editor.Value);
          if (now != null) OnMessage?.Invoke(this, $"{editor.Title}: {now.Text}.");
+      }
+
+      internal void WriteSpawn(IntroSpawnEditor editor, CubeNewGameSpawn spawn) {
+         CompleteEdit();
+         try {
+            if (!CubeNewGameSpawnTable.Write(model, viewPort.CurrentChange, spawn)) { ReportError(IntroSpawnEditor.NeedsCubeMessage); Reload(); return; }
+         } catch (Exception e) {
+            CompleteEdit();
+            ReportError("Could not change the ROM: " + e.Message);
+            Reload();
+            return;
+         }
+         CompleteEdit();
+         viewPort.Refresh();
+         Reload();
+         OnMessage?.Invoke(this, $"New game spawn: {editor.Maps.Selected?.Text ?? "changed"} at {spawn.X}, {spawn.Y}.");
       }
 
       internal void ApplyPicture(IntroPictureEditor editor, IntroImage source) {

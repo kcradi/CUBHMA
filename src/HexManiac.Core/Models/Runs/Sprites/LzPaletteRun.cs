@@ -12,7 +12,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Sprites {
       public override int Pages {
          get {
             if (Start + 4 > Model.Count) return 1;
-            var length = Model.ReadMultiByteValue(Start + 1, 3);
+            var length = ReadDecompressedLength(Model, Start);
             var paletteLength = (int)Math.Pow(2, PaletteFormat.Bits) * 2;
             return length / paletteLength;
          }

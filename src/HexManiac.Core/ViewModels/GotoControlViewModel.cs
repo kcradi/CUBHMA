@@ -185,7 +185,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public bool ControlVisible {
          get => controlVisible;
          set {
-            if (TryUpdate(ref controlVisible, value) && value) CompletionIndex = -1;
+            if (TryUpdate(ref controlVisible, value) && value) {
+               CompletionIndex = -1;
+               if (CubeScripts.IsAvailable(viewPort?.Model)) RefreshOptions(); // entries like Scripts > EXP Share depend on a byte of the ROM (it may have changed, or been undone)
+            }
             if (value) MoveFocusToGoto?.Invoke(this, EventArgs.Empty);
          }
       }
@@ -381,6 +384,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
          using (ModelCacheScope.CreateScope(viewPort.Model)) {
             address = viewPort.Model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, currentSelection);
+            if (address == Pointer.NULL) address = GotoAliases.FindAddress(viewPort.Model, currentSelection); // an original entry that this ROM keeps somewhere else
          }
          if (address != Pointer.NULL && !withinTextChange) {
             viewPort?.Goto?.Execute(address);
@@ -595,6 +599,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             List<string> allOptions = model.GetExtendedAutocompleteOptions(filter)?.ToList() ?? new();
             allOptions.AddRange(model.GetMatchingMaps(filter).Select(map => map.Name));
             allOptions.AddRange(docs.GetMatchingDocumentation(filter).Select(doc => doc.Label));
+            allOptions.AddRange(GotoAliases.Matching(model, filter).Except(allOptions)); // the original entries, for a ROM (CUBE) that merged their tables into others
             var selections = GetSectionSelections(previousSections).ToList();
 
             var newSection = new GotoLabelSection(allOptions, selections);
@@ -644,6 +649,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var matchingMaps = new List<MapInfo>();
          if (fullName.StartsWith("maps.bank") && fullName.Contains("-")) matchingMaps = model.GetMatchingMaps(fullName);
          var address = model.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, fullName);
+         if (address == Pointer.NULL) address = GotoAliases.FindAddress(model, fullName);
          var matchingDoc = docs.FirstOrDefault(doc => doc.Label == fullName);
          if (address != Pointer.NULL) {
             IsGoto = true;

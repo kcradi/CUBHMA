@@ -232,12 +232,35 @@ namespace HavenSoft.HexManiac.WPF.Windows {
             });
          }
 
+         var stateItems = new List<(MenuItem item, IQuickEditMenuState state)>();
          foreach (var edit in ViewModel.QuickEditsMisc) {
             var command = CreateQuickEditCommand(edit);
-            QuickEditsMisc.Items.Add(new MenuItem {
+            var item = new MenuItem {
                Header = edit.Name,
                Command = command
-            });
+            };
+            if (edit is IQuickEditMenuState state) {
+               // hidden for ROMs it is not meant for; grayed out with a tooltip that says why (a disabled item only shows its tooltip with ShowOnDisabled)
+               ToolTipService.SetShowOnDisabled(item, true);
+               stateItems.Add((item, state));
+            }
+            QuickEditsMisc.Items.Add(item);
+         }
+         if (stateItems.Count > 0) {
+            void RefreshStates() {
+               IViewPort current = null;
+               if (ViewModel.SelectedIndex >= 0) {
+                  var tab = ViewModel[ViewModel.SelectedIndex];
+                  if (tab is MapEditorViewModel map) tab = map.ViewPort;
+                  current = tab as IViewPort;
+               }
+               foreach (var (item, state) in stateItems) {
+                  item.Visibility = state.IsVisible(current) ? Visibility.Visible : Visibility.Collapsed;
+                  item.ToolTip = state.ToolTip(current);
+               }
+            }
+            RefreshStates();
+            QuickEditsMisc.SubmenuOpened += (sender, e) => RefreshStates();
          }
          ((RomOverview)ViewModel.QuickEditsMisc[0]).EditSelected += (sender, e) => DeveloperRenderRomOverview();
       }
@@ -462,6 +485,28 @@ namespace HavenSoft.HexManiac.WPF.Windows {
 
       #endregion
 
+      #region How flags and variables are written in the script editor (View menu)
+
+      private void ScriptNameDisplayMenuOpened(object sender, RoutedEventArgs e) {
+         if (sender is MenuItem menu) UpdateScriptNameDisplayChecks(menu);
+      }
+
+      private void ScriptNameDisplayClick(object sender, RoutedEventArgs e) {
+         var item = sender as MenuItem;
+         if (item == null || !int.TryParse(item.Tag as string, out var choice)) return;
+         ViewModel.ScriptNameDisplay = (HavenSoft.HexManiac.Core.Models.Code.ScriptNameDisplay)choice;
+         if (item.Parent is MenuItem menu) UpdateScriptNameDisplayChecks(menu);
+      }
+
+      /// <summary>One choice is always checked: the one that is stored.</summary>
+      private void UpdateScriptNameDisplayChecks(MenuItem menu) {
+         foreach (var choice in menu.Items.OfType<MenuItem>()) {
+            choice.IsChecked = int.TryParse(choice.Tag as string, out var value) && value == (int)ViewModel.ScriptNameDisplay;
+         }
+      }
+
+      #endregion
+
       private void ExitClicked(object sender, EventArgs e) {
          ViewModel.CloseAll.Execute();
          if (ViewModel.Count == 0) Close();
@@ -582,6 +627,28 @@ namespace HavenSoft.HexManiac.WPF.Windows {
       private void UpdateCollisionGridOpacityChecks(MenuItem menu) {
          foreach (var choice in menu.Items.OfType<MenuItem>()) {
             choice.IsChecked = int.TryParse(choice.Tag as string, out var percent) && percent == ViewModel.CollisionGridOpacity;
+         }
+      }
+
+      #endregion
+
+      #region How GFX-variable events look in the map editor (View menu)
+
+      private void GraphicsVariableDisplayMenuOpened(object sender, RoutedEventArgs e) {
+         if (sender is MenuItem menu) UpdateGraphicsVariableDisplayChecks(menu);
+      }
+
+      private void GraphicsVariableDisplayClick(object sender, RoutedEventArgs e) {
+         var item = sender as MenuItem;
+         if (item == null || !int.TryParse(item.Tag as string, out var choice)) return;
+         ViewModel.GraphicsVariableDisplay = (HavenSoft.HexManiac.Core.ViewModels.Map.GraphicsVariableDisplay)choice;
+         if (item.Parent is MenuItem menu) UpdateGraphicsVariableDisplayChecks(menu);
+      }
+
+      /// <summary>One choice is always checked: the one that is stored.</summary>
+      private void UpdateGraphicsVariableDisplayChecks(MenuItem menu) {
+         foreach (var choice in menu.Items.OfType<MenuItem>()) {
+            choice.IsChecked = int.TryParse(choice.Tag as string, out var value) && value == (int)ViewModel.GraphicsVariableDisplay;
          }
       }
 

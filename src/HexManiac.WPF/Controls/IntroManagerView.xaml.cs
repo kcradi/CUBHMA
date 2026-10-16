@@ -18,6 +18,7 @@ namespace HavenSoft.HexManiac.WPF.Controls {
             e.Handled = true;
          } else if (e.Key == Key.Escape) {
             if (box.DataContext is IntroSettingEditor editor) box.Text = editor.NumberText;
+            else if (box.DataContext is IntroSpawnEditor spawn) box.Text = box.Tag as string == "Y" ? spawn.YText : spawn.XText;
             Keyboard.ClearFocus();
             e.Handled = true;
          }

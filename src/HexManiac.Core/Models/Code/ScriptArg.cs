@@ -17,7 +17,30 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       int Length(IDataModel model, int start);
    }
 
+   /// <summary>How flags and variables are written in the script editor (View > Script Flags&amp;Vars).</summary>
+   public enum ScriptNameDisplay {
+      /// <summary>Numbers. Only the flags the ROM named on purpose (list 'scriptnamedflags': level caps, badges, start menu entries, battle options) keep their names.</summary>
+      Numbers = 0,
+      /// <summary>Every flag and variable by its define (the lists 'scriptflagaliases' and 'scriptvariablealiases').</summary>
+      Defines = 1,
+   }
+
    public class ScriptArg : IScriptArg {
+      public const string NamedFlagList = "scriptnamedflags", AllFlagList = "scriptflagaliases", AllVariableList = "scriptvariablealiases";
+
+      /// <summary>The View menu's choice, saved with the other settings. Numbers is the default.</summary>
+      public static ScriptNameDisplay NameDisplay { get; set; } = ScriptNameDisplay.Numbers;
+
+      /// <summary>
+      /// The list that gives the names the editor shows for a list of the script reference.
+      /// Defines mode shows every flag (not only the named ones). Null means: show numbers (variables in Numbers mode).
+      /// </summary>
+      public static string ListForDisplay(string listName) {
+         if (listName == AllVariableList && NameDisplay == ScriptNameDisplay.Numbers) return null;
+         if (listName == NamedFlagList && NameDisplay == ScriptNameDisplay.Defines) return AllFlagList;
+         return listName;
+      }
+
       private int length;
 
       public ArgType Type { get; }
@@ -168,7 +191,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       private string Convert(IDataModel model, int value, int bytes) {
          var preferHex = EnumTableName?.EndsWith("|h") ?? false;
          var preferSign = EnumTableName?.EndsWith("|z") ?? false;
-         var enumName = EnumTableName?.Split('|')[0];
+         var enumName = ListForDisplay(EnumTableName?.Split('|')[0]);
          var table = string.IsNullOrEmpty(enumName) ? null : model.GetOptions(enumName);
          if (table == null || value - EnumOffset < 0 || table.Count <= value - EnumOffset || string.IsNullOrEmpty(table[value])) {
             if (value != int.MinValue) preferHex |= Math.Abs(value).InRange(0x4000, 20000) || Math.Abs(value) > 20100;
@@ -192,9 +215,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                result += EnumOffset;
                return null;
             }
-            var options = model.GetOptions(EnumListName);
+            var listName = ListForDisplay(EnumListName) ?? EnumListName;
+            var options = model.GetOptions(listName);
             if (options.Count == 0) return $"Could not parse '{value}' {parseType}."; // the ROM has no names for this argument
-            if (ArrayRunEnumSegment.TryParse(EnumListName, model, value, out result)) {
+            if (ArrayRunEnumSegment.TryParse(listName, model, value, out result)) {
                result += EnumOffset;
                return null;
             }

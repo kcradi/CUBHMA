@@ -552,6 +552,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
             parent.ViewPort.GotoScript(script.ScriptAddress);
             var body = tool.Contents[0];
             body.Content = $"setvar gfx{Graphics - DynamicStart} 18" + Environment.NewLine + body.Content;
+            GraphicsVariableSprites.Invalidate(element.Model);
             break;
          }
          if (!transitionScriptFound) {
@@ -559,6 +560,20 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
             scripts.Scripts.Last().ScriptTypeIndex = 2; // Transition
             AddDynamicGraphicsToTransitionScript();
          }
+      }
+
+      /// <summary>The first sprite that a script of this map gives to the graphics variable of this event (-1 if none does).</summary>
+      private int FindGraphicsVariableSpriteInMap() {
+         if (parent == null) return -1;
+         var assignments = GraphicsVariableSprites.InMap(element.Model, parser, parent.GetMapModel());
+         return assignments.For(Graphics - DynamicStart).DefaultIfEmpty(-1).First();
+      }
+
+      /// <summary>The first sprite that a script of this map gives to any graphics variable (-1 if none does).</summary>
+      private int FindAnyGraphicsVariableSpriteInMap() {
+         if (parent == null) return -1;
+         var assignments = GraphicsVariableSprites.InMap(element.Model, parser, parent.GetMapModel());
+         return assignments.Any().DefaultIfEmpty(-1).First();
       }
 
       public int PullValueFromTransitionScript() {
@@ -614,6 +629,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Map {
             var existingValue = Element.Model.ReadMultiByteValue(spot.Address + 3, 2);
             if (existingValue == dynamicGraphicsIndex + dynamicOffset) continue;
             Element.Model.WriteMultiByteValue(spot.Address + 3, 2, Token, dynamicGraphicsIndex + dynamicOffset);
+            GraphicsVariableSprites.Invalidate(Element.Model);
             RaiseEventVisualUpdated();
          }
       }
@@ -1836,16 +1852,19 @@ show:
             76 => 76, // invisible
             _ => 0,
          };
-         EventRender = RenderBerryTree(model) ?? Render(model, owTable, DefaultOW, Graphics, facing, PullValueFromTransitionScript);
+         if (parent != null) GraphicsVariableSprites.RegisterParser(model, parser);
+         EventRender = RenderBerryTree(model) ?? Render(model, owTable, DefaultOW, Graphics, facing, FindGraphicsVariableSpriteInMap, FindAnyGraphicsVariableSpriteInMap);
          NotifyPropertyChanged(nameof(EventRender));
       }
 
       /// <param name="facing">(0, 1, 2, 3) = (down, up, left, right)</param>
-      public static IPixelViewModel Render(IDataModel model, ModelTable owTable, IPixelViewModel defaultOW, int index, int facing, Func<int> dynamicSprites) {
+      /// <param name="dynamicSprites">For a graphics variable: the sprite that a script of the map gives to this variable (-1 if none does).</param>
+      /// <param name="dynamicFallback">For a graphics variable: a sprite that a script of the map gives to any graphics variable (-1 if none does).</param>
+      public static IPixelViewModel Render(IDataModel model, ModelTable owTable, IPixelViewModel defaultOW, int index, int facing, Func<int> dynamicSprites, Func<int> dynamicFallback = null) {
          // special case: gfx variables
-         // Every one of them gets the placeholder, on every map: which sprite the var holds is decided by scripts at runtime
-         // (a transition script on some maps, a trigger, an NPC's own script, ... on others), so the editor never guesses from one script.
-         if (IsDynamicGraphics(model, index)) return GetDynamicPlaceholder(model, owTable, defaultOW);
+         // Which sprite the var holds is decided by scripts at runtime (a transition script on some maps, a trigger, an NPC's own script, ... on others).
+         // What the editor shows instead is a View menu choice (GraphicsVariableDisplay).
+         if (IsDynamicGraphics(model, index)) return RenderDynamicGraphics(model, owTable, defaultOW, index, dynamicSprites, dynamicFallback);
 
          // special case: expanded OWs for pokemon / sprites20k (HMA expansion utility integration)
          ModelTable dataTable;
@@ -1918,6 +1937,68 @@ show:
          var frames = image.PixelHeight / frameHeight;
          var frame = listCount == 1 && facing > 0 && facing < frames && facing < 3 ? facing : 0;
          return ReadonlyPixelViewModel.Crop(image, 0, frame * frameHeight, Math.Min(frameWidth, image.PixelWidth), frameHeight);
+      }
+
+      /// <summary>The View menu choice for how graphics-variable events are drawn. Shared by every map (saved with the settings).</summary>
+      public static GraphicsVariableDisplay GraphicsVariableDisplay { get; set; } = GraphicsVariableDisplay.ScriptSprite;
+
+      private static IPixelViewModel RenderDynamicGraphics(IDataModel model, ModelTable owTable, IPixelViewModel defaultOW, int index, Func<int> mapSprite, Func<int> mapAnySprite) {
+         var variable = index - GetDynamicGraphicsStart(model);
+         return ChooseDynamicPicture(
+            GraphicsVariableDisplay,
+            defaultOW,
+            () => GetFirstPokemonIcon(model) is { PixelWidth: > 0 } icon ? icon : null,
+            () => GetDynamicPlaceholder(model, owTable, defaultOW),
+            new Func<IEnumerable<int>>[] {
+               // the first sprite that a script gives to this variable: in the map first, then in any other script, then (the map's) other variables
+               () => new[] { mapSprite?.Invoke() ?? -1 },
+               () => GraphicsVariableSprites.Everywhere(model).For(variable),
+               () => new[] { mapAnySprite?.Invoke() ?? -1 },
+            },
+            sprite => {
+               if (!CanRenderSprite(model, owTable, sprite)) return null;
+               var picture = Render(model, owTable, defaultOW, sprite, 0, () => -1);
+               return ReferenceEquals(picture, defaultOW) ? null : picture;
+            });
+      }
+
+      /// <summary>
+      /// The picture of a graphics-variable event for the chosen display mode. The pieces that cost something are only asked for when the mode needs them.
+      /// </summary>
+      /// <param name="questionMark">The question mark picture of the original HexManiacAdvance.</param>
+      /// <param name="firstPokemon">The first frame of the icon of the first Pokemon of the Pokedex (null if there is none).</param>
+      /// <param name="placeholder">The blacked-out sprite with a question mark.</param>
+      /// <param name="candidates">Where to look for the sprite a script gives to the variable, best place first: each gives the sprites in the order the scripts name them.</param>
+      /// <param name="renderSprite">The first frame of a sprite as a script names it (null if this ROM cannot draw it).</param>
+      public static IPixelViewModel ChooseDynamicPicture(GraphicsVariableDisplay mode, IPixelViewModel questionMark, Func<IPixelViewModel> firstPokemon, Func<IPixelViewModel> placeholder, IEnumerable<Func<IEnumerable<int>>> candidates, Func<int, IPixelViewModel> renderSprite) {
+         switch (mode) {
+            case GraphicsVariableDisplay.QuestionMark:
+               return questionMark ?? placeholder();
+            case GraphicsVariableDisplay.FirstPokemonIcon:
+               return firstPokemon?.Invoke() ?? questionMark ?? placeholder();
+            case GraphicsVariableDisplay.BlackedOutQuestionMark:
+               return placeholder();
+         }
+         foreach (var candidate in candidates) {
+            foreach (var sprite in candidate()) {
+               var picture = renderSprite(sprite);
+               if (picture != null) return picture;
+            }
+         }
+         return placeholder(); // no script gives the variable a sprite that can be drawn
+      }
+
+      /// <summary>True if 'sprite' (as a script writes it: a list index, +10000 for a Pokemon icon, +20000 for the expanded sprites) names a sprite this ROM has.</summary>
+      private static bool CanRenderSprite(IDataModel model, ModelTable owTable, int sprite) {
+         if (sprite < 0 || IsDynamicGraphics(model, sprite)) return false;
+         if (sprite.InRange(10000, 20000)) return model.GetTableModel("graphics.overworld.pokemon") is { } mons && sprite - 10000 < mons.Count;
+         if (sprite.InRange(20000, 30000)) return model.GetTableModel("graphics.overworld.sprites20k") is { } big && sprite - 20000 < big.Count;
+         return owTable != null && sprite < owTable.Count;
+      }
+
+      /// <summary>The first frame of the icon of the first Pokemon of the Pokedex (species 1), drawn like the question mark picture, or null if the ROM has no Pokemon icons.</summary>
+      public static IPixelViewModel GetFirstPokemonIcon(IDataModel model) {
+         return model.CurrentCacheScope.GetOrAdd("first-pokemon-icon", () => BlockMapViewModel.GetPokemonIconAsSprite(model, 1) ?? new ReadonlyPixelViewModel(0, 0));
       }
 
       private static readonly string[] QuestionMarkGlyph = { ".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.." };

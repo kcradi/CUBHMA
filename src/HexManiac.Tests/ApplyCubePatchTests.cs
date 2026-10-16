@@ -27,6 +27,7 @@ namespace HavenSoft.HexManiac.Tests {
          public string Location => "test-resources";
          public byte[] ReadPatch() => Patch;
          public string[] ReadToml() => Toml;
+         public byte[] ReadVersions() => null;
       }
 
       /// <summary>Runs everything at once, but lets a test change the world just before the patch is built in the background.</summary>

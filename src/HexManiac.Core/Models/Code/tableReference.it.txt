@@ -104,7 +104,7 @@ graphics.trainers.animations.back       , 03F790,  [animationPointer<[animation<
 graphics.trainers.animations.frames     , 10BE6C,  [animationPointer<[animation<>]1>]graphics.trainers.sprites.front
 graphics.trainers.coordinates.front     , 037F38,  [x. y. unused:]graphics.trainers.sprites.front
 graphics.trainers.palettes.front        , 034638,  [palette<`lzp4`> index: unused:]graphics.trainers.sprites.front
-graphics.trainers.sprites.back.throw    , 03F78C,  [titleTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter
+graphics.trainers.sprites.back.throw    , 03F78C,  [tileTag:|h paletteTag:|h oam<> anims<> sprites<`osl|graphics.trainers.palettes.back:sprite`> affineAnimations<> callback<>]graphics.trainers.sprites.back.enter
 graphics.trainers.coordinates.back      , 032460,  [x. y. unused:]graphics.trainers.sprites.back.enter
 graphics.trainers.palettes.back         , 0334C0,  [pal<`lzp4`> sprite::]graphics.trainers.sprites.back.enter
 graphics.trainers.emotes.sprites        , 3C039C,  [pointer<`ucs4x2x2|graphics.overworld.palettes:id=1100`> length::]15

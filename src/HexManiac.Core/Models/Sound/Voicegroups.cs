@@ -152,6 +152,11 @@ namespace HavenSoft.HexManiac.Core.Models.Sound {
          return real;
       }
 
+      /// <summary>True when the address starts a table of 12-byte elements (a voicegroup the metadata declares) whose first instrument is not an instrument: the declaration does not fit the data.</summary>
+      public static bool IsDeclaredVoicegroupWithoutInstruments(IDataModel model, int address)
+         => address >= 0 && address < model.Count && model.GetNextRun(address) is ITableRun table && table.Start == address && table.ElementLength == EntrySize && table.ElementCount > 0
+         && !ToneData.TryRead(model, address, out _);
+
       /// <summary>The number of instruments in a row, from the start, that look valid.</summary>
       public static int CountEntries(IDataModel model, int address, int maxEntries = MaxEntries) {
          if (address < 0) return 0;
@@ -233,8 +238,8 @@ namespace HavenSoft.HexManiac.Core.Models.Sound {
       private static VoicegroupInfo Build(IDataModel model, int address, int bound, string anchor, string name, IReadOnlyList<string> usedBy) {
          int entries, copy;
          bound = Math.Max(0, Math.Min(bound, MaxEntries));
-         if (address >= 0 && name != null && model.GetNextRun(address) is ITableRun table && table.Start == address && table.ElementLength == EntrySize && table.ElementCount > 0) {
-            // a table the metadata declares: trust its length
+         if (address >= 0 && name != null && model.GetNextRun(address) is ITableRun table && table.Start == address && table.ElementLength == EntrySize && table.ElementCount > 0 && ToneData.TryRead(model, address, out _)) {
+            // a table the metadata declares: trust its length (when its first instrument is an instrument: an old toml whose anchor moved to other data is not trusted, the data is read as it is)
             entries = copy = Math.Min(MaxEntries, table.ElementCount);
          } else {
             entries = CountEntries(model, address, bound);

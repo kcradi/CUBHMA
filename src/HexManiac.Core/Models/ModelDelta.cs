@@ -126,11 +126,13 @@ namespace HavenSoft.HexManiac.Core.Models {
       }
 
       public void AddRun(IFormattedRun run) {
+         ModelEditStamp.BumpRuns();
          using (CaptureNonDataChange())
          addedRuns[run.Start] = run;
       }
 
       public void RemoveRun(IFormattedRun run) {
+         ModelEditStamp.BumpRuns();
          using (CaptureNonDataChange())
          if (addedRuns.ContainsKey(run.Start)) {
             addedRuns.Remove(run.Start);
@@ -168,7 +170,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       }
 
       public ModelDelta Revert(IDataModel model) {
-         ModelEditStamp.Bump(); // the runs and names change below without going through a token
+         ModelEditStamp.BumpRuns(); // the runs and names change below without going through a token
          var reverse = new ModelDelta { HasDataChange = HasDataChange };
 
          foreach (var kvp in oldData) {

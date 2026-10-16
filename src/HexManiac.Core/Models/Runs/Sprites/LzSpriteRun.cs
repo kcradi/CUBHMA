@@ -10,7 +10,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Sprites {
 
       public override int Pages {
          get {
-            var length = Model.ReadMultiByteValue(Start + 1, 3);
+            var length = ReadDecompressedLength(Model, Start);
             return length / SpriteFormat.ExpectedByteLength;
          }
       }

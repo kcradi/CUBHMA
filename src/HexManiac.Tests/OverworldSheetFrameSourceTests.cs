@@ -67,6 +67,52 @@ namespace HavenSoft.HexManiac.Tests {
          }
       }
 
+      /// <summary>The CUBE metadata formats the player's picture as the whole sheet (2 tiles wide, 9 frames of 4 tiles stacked): one frame is still 16x32.</summary>
+      private void FormatTheSheetAsOneTallPicture() {
+         ViewPort.Edit($"@{Sheet0:X} ^sheetpicture`ucs4x2x36` ");
+         var run = Model.GetNextRun(Sheet0) as SpriteRun;
+         Assert.NotNull(run);
+         Assert.Equal(Sheet0, run.Start);
+         Assert.Equal(36, run.SpriteFormat.TileHeight);
+      }
+
+      [Fact]
+      public void ReadOverworldFrame_ASheetFormattedAsOneTallPicture_ReadsOneFrameOfTheListedSize() {
+         FormatTheSheetAsOneTallPicture();
+         for (int f = 0; f < 9; f++) {
+            var picture = CharacterSprites.ReadOverworldFrame(Model, List, f);
+            Assert.Equal(16, picture.GetLength(0));
+            Assert.Equal(32, picture.GetLength(1));
+            Assert.Equal(f % 16, picture[0, 0]);
+            Assert.Equal((f + 1) % 16, picture[1, 0]);
+         }
+      }
+
+      [Fact]
+      public void Source_ASheetFormattedAsOneTallPicture_StillReadsAndWritesSixteenByThirtyTwoFrames() {
+         FormatTheSheetAsOneTallPicture();
+         var picture = source.ReadFrame(4, 2);
+         Assert.Equal(16, picture.GetLength(0));
+         Assert.Equal(32, picture.GetLength(1));
+         picture[0, 0] = 9;
+         source.WriteFrame(ViewPort.CurrentChange, 4, 2, picture);
+         Assert.Equal(9, Data[Sheet0 + FrameBytes * 4] & 0xF);
+         Assert.Equal(3, Data[Sheet0 + FrameBytes * 3] & 0xF); // the frame before is untouched
+         Assert.Equal(5, Data[Sheet0 + FrameBytes * 5] & 0xF); // and the one after
+      }
+
+      [Fact]
+      public void Previews_ShowTheFirstThreeFramesOfTheSheet_StandingFacingDownUpAndLeft() {
+         FormatTheSheetAsOneTallPicture();
+         var sprites = CharacterSprites.Load(Model, CharacterRole.Male);
+         Assert.Equal(3, sprites.OverworldFrames.Count);
+         for (int i = 0; i < 3; i++) {
+            Assert.Equal(16, sprites.OverworldFrames[i].GetLength(0));
+            Assert.Equal(32, sprites.OverworldFrames[i].GetLength(1));
+            Assert.Equal(i, sprites.OverworldFrames[i][0, 0]); // frame i's own first pixel
+         }
+      }
+
       [Fact]
       public void Source_AllFramesPointAtTheListForThePalette() {
          Assert.Equal(List.Run.Start, source.SpritePointer(0));

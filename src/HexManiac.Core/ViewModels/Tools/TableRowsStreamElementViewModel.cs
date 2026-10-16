@@ -136,6 +136,143 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          NotifyPropertyChanged(nameof(Columns));
       }
 
+      #region Copy / paste the whole list as text
+
+      private bool showCopied;
+      /// <summary>
+      /// Becomes true each time <see cref="CopyTable"/> puts the list on the clipboard (false, then true again on a second copy),
+      /// so the view can flash a short "Copied!" next to the button.
+      /// </summary>
+      public bool ShowCopied { get => showCopied; private set => Set(ref showCopied, value); }
+
+      private string ListName => string.IsNullOrEmpty(areaName) ? "the list" : $"the {areaName} list";
+
+      /// <summary>
+      /// Puts the whole list on the clipboard as plain text, in the format of HMA's original text editor for these lists:
+      /// one line per row ("2, 3, Zigzagoon"), with the "# comment" lines of the tables that have them.
+      /// The same text pastes back here, into the text editor of upstream HMA, or anywhere else.
+      /// </summary>
+      public void CopyTable(IFileSystem fileSystem) {
+         RefreshContentFromData();
+         fileSystem.CopyText = Content ?? string.Empty;
+         ShowCopied = false;
+         ShowCopied = true;
+         ViewPort.RaiseMessage($"Copied the {Rows.Count} rows of {ListName} as text.");
+      }
+
+      /// <summary>
+      /// Reads the clipboard text (as written by <see cref="CopyTable"/> or by the text editor of upstream HMA) into the list.
+      /// Nothing is written unless every line can be read; the whole paste is a single step for Undo.
+      /// </summary>
+      public void PasteTable(IFileSystem fileSystem) {
+         ShowCopied = false;
+         if (!TryPasteTable(fileSystem.CopyText, out var error)) ViewPort.RaiseError(error);
+      }
+
+      /// <summary>
+      /// Checks every line of the text first, then writes all of it at once.
+      /// Accepts lines like "2, 3, Zigzagoon" (also without commas, with quotes around names that have spaces, or with the '+' that a deep copy puts in front of a line).
+      /// Empty lines and "# comment" lines are skipped.
+      /// </summary>
+      /// <returns>false (and writes nothing) if the text does not have exactly one line per row, or any value cannot be read.</returns>
+      public bool TryPasteTable(string text, out string error) {
+         error = null;
+         var destination = Model.ReadPointer(Start);
+         if (Model.GetNextRun(destination) is not ITableRun table || table.Start != destination || !Supports(table)) {
+            error = "This list cannot be pasted into.";
+            return false;
+         }
+         if (string.IsNullOrWhiteSpace(text)) {
+            error = "The clipboard has no text to paste.";
+            return false;
+         }
+
+         var lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith("#"))
+            .Select(line => line[0] == ArrayRun.ExtendArray ? line.Substring(1).Trim() : line)
+            .ToList();
+         if (lines.Count != table.ElementCount) {
+            error = $"Expected {table.ElementCount} lines of text (one per row: min level, max level, Pokémon), but the clipboard has {lines.Count}.";
+            return false;
+         }
+
+         // the text has one value for each part of a row that has a length (the same values the text editor shows): an "unused" part too
+         var segments = table.ElementContent.Where(segment => segment.Length > 0).ToList();
+         var values = new int[table.ElementCount, segments.Count];
+         for (int i = 0; i < lines.Count; i++) {
+            var tokens = TableStreamRun.Tokenize(lines[i]);
+            if (tokens.Count > segments.Count && segments[segments.Count - 1] is ArrayRunEnumSegment) {
+               // a name with spaces that was typed without quotes: "2, 3, Mr. Mime"
+               tokens[segments.Count - 1] = string.Join(" ", tokens.Skip(segments.Count - 1));
+               tokens.RemoveRange(segments.Count, tokens.Count - segments.Count);
+            }
+            if (tokens.Count != segments.Count) {
+               error = $"Line {i + 1} \"{lines[i]}\": expected {segments.Count} values ({string.Join(", ", segments.Select(segment => GetColumnTitle(segment.Name).ToLower()))}), found {tokens.Count}.";
+               return false;
+            }
+            for (int j = 0; j < segments.Count; j++) {
+               var segment = segments[j];
+               var max = segment.Length >= 4 ? int.MaxValue : (1 << (8 * segment.Length)) - 1;
+               var token = tokens[j].Trim();
+               int value;
+               if (segment is ArrayRunEnumSegment enumSegment) {
+                  if (!enumSegment.TryParse(Model, token, out value)) {
+                     error = $"Line {i + 1} \"{lines[i]}\": \"{token}\" is not a known {GetColumnTitle(segment.Name)}.";
+                     return false;
+                  }
+               } else if (!token.TryParseInt(out value)) {
+                  error = $"Line {i + 1} \"{lines[i]}\": \"{token}\" is not a number ({GetColumnTitle(segment.Name).ToLower()}).";
+                  return false;
+               }
+               if (value < 0 || value > max) {
+                  error = $"Line {i + 1} \"{lines[i]}\": {GetColumnTitle(segment.Name).ToLower()} {value} is out of range (0 to {max}).";
+                  return false;
+               }
+               values[i, j] = value;
+            }
+         }
+
+         // everything can be read: write it as one change (the paste is undone in one step, apart from any edit typed before it)
+         ViewPort.ChangeHistory.ChangeCompleted();
+         var changeToken = ViewPort.CurrentChange;
+         var changed = new List<int>();
+         for (int i = 0; i < table.ElementCount; i++) {
+            var offset = table.Start + table.ElementLength * i;
+            int j = 0;
+            foreach (var segment in table.ElementContent) {
+               if (segment.Length == 0) continue;
+               if (Model.ReadMultiByteValue(offset, segment.Length) != values[i, j]) {
+                  Model.WriteMultiByteValue(offset, segment.Length, changeToken, values[i, j]);
+                  changed.Add(offset);
+               }
+               offset += segment.Length;
+               j++;
+            }
+         }
+         foreach (var address in changed) {
+            var offsets = table.ConvertByteOffsetToArrayOffset(address);
+            ViewPort.HandleErrorInfo(table.NotifyChildren(Model, changeToken, offsets.ElementIndex, offsets.SegmentIndex));
+         }
+         ViewPort.ChangeHistory.ChangeCompleted();
+
+         // the boxes show the new values (the same boxes: the keyboard focus stays where it is)
+         RefreshCells();
+         RaiseCellChanged();
+         ViewPort.RaiseMessage(changed.Count == 0 ? $"The pasted rows are the same as the rows of {ListName}." : $"Pasted {table.ElementCount} rows into {ListName}.");
+         return true;
+      }
+
+      /// <summary>Reads the data again into the existing boxes (or builds new ones if the shape of the list changed).</summary>
+      private void RefreshCells() {
+         var fresh = new TableRowsStreamElementViewModel(ViewPort, ParentName, Start, RunFormat, areaName);
+         bool sameShape = Rows.Count == fresh.Rows.Count && columns.Count == fresh.columns.Count;
+         for (int i = 0; sameShape && i < Rows.Count; i++) sameShape = Rows[i].TryCopy(fresh.Rows[i]);
+         if (!sameShape) BuildRows();
+      }
+
+      #endregion
+
       protected override bool TryCopy(StreamElementViewModel other) {
          if (other is not TableRowsStreamElementViewModel that) return false;
          if (!base.TryCopy(other)) return false;

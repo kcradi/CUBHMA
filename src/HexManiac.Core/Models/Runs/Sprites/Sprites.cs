@@ -255,9 +255,45 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Sprites {
                }
             } else {
                results.AddRange(model.GetPointedChildren<IPaletteRun>(spriteTable, offset.ElementIndex));
+               return KeepPalettesOfTheSameVariant(model, spriteTable, offset, results);
             }
          }
          return results;
+      }
+
+      /// <summary>
+      /// A table element may hold several sprite/palette sets side by side: normal and female, or the regular sprites and the overworld ones.
+      /// Example: frontPic, palette, shinyPalette, frontPicFemale, paletteFemale, shinyPaletteFemale.
+      /// A sprite should only offer the palettes of its own set (normal + shiny), so the female and overworld palettes are dropped
+      /// unless the sprite's own field name says it belongs to that set. If nothing would be left, everything is kept.
+      /// </summary>
+      private static IReadOnlyList<IPaletteRun> KeepPalettesOfTheSameVariant(IDataModel model, ITableRun table, ArrayOffset offset, List<IPaletteRun> palettes) {
+         if (palettes.Count < 3 || offset.ElementIndex < 0 || offset.SegmentIndex < 0 || offset.SegmentIndex >= table.ElementContent.Count) return palettes;
+         var spriteVariant = FieldVariant(table.ElementContent[offset.SegmentIndex].Name);
+         var kept = new List<IPaletteRun>();
+         foreach (var palette in palettes) {
+            var field = FindPointerFieldName(model, table, offset.ElementIndex, palette.Start);
+            if (field == null || FieldVariant(field) == spriteVariant) kept.Add(palette);
+         }
+         return kept.Count == 0 ? palettes : kept;
+      }
+
+      private static string FindPointerFieldName(IDataModel model, ITableRun table, int elementIndex, int destination) {
+         var segmentOffset = 0;
+         foreach (var segment in table.ElementContent) {
+            if (segment is ArrayRunPointerSegment) {
+               var source = table.Start + table.ElementLength * elementIndex + segmentOffset;
+               if (source >= 0 && source + 4 <= model.Count && model.ReadPointer(source) == destination) return segment.Name;
+            }
+            segmentOffset += segment.Length;
+         }
+         return null;
+      }
+
+      private static (bool female, bool overworld) FieldVariant(string name) {
+         name = name ?? string.Empty;
+         var overworld = name.Length > 2 && name.StartsWith("ow") && char.IsUpper(name[2]);
+         return (name.Contains("Female"), overworld);
       }
 
       /// <summary>

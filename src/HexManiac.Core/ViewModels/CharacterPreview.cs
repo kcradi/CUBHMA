@@ -51,9 +51,36 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public const string TrainerSpritesTable = "data.trainers.sprites";
       public const string OverworldPicName = "objecteventgfx";
 
-      /// <summary>The frames of the overworld sheet that are shown: standing facing down, then the two walking frames facing down.</summary>
-      public static readonly IReadOnlyList<int> OverworldFrameNumbers = new[] { 0, 3, 4 };
-      public static readonly IReadOnlyList<string> OverworldFrameLabels = new[] { "standing", "walking", "walking" };
+      /// <summary>
+      /// The frames of the overworld sheet that the previews show: standing still facing down, facing up and facing left, with no walking frames.
+      /// The player's walking sheet (and every standard sheet) starts with those three, in that order: pokeemerald's sAnim_FaceSouth, sAnim_FaceNorth and
+      /// sAnim_FaceWest show frames 0, 1 and 2 (facing right is frame 2 flipped). Frames 3 to 8 are walking down, up and left, two of each.
+      /// </summary>
+      public static readonly IReadOnlyList<int> OverworldFrameNumbers = new[] { 0, 1, 2 };
+      public static readonly IReadOnlyList<string> OverworldFrameLabels = new[] { "facing down", "facing up", "facing left" };
+
+      /// <summary>The frame of the sheet that shows the character standing still facing that way (right is not a frame of its own: the game flips left).</summary>
+      public static int StandingFrame(OverworldFacing facing) => facing switch {
+         OverworldFacing.Down => 0,
+         OverworldFacing.Up => 1,
+         OverworldFacing.Left => 2,
+         OverworldFacing.Right => 2,
+         _ => 0,
+      };
+
+      /// <summary>
+      /// The size, in tiles, of one frame of a sheet that stores its frames one after the other: frameBytes long, as wide as the sheet's picture.
+      /// The sheet's picture can hold every frame stacked (the player's sheet is 2 tiles wide and 36 tiles tall: 9 frames of 2x4),
+      /// so its own height is not the height of a frame. Returns the picture's own size when the frame size is unknown or doesn't fit the width.
+      /// </summary>
+      public static (int tileWidth, int tileHeight) FrameTileSize(int frameBytes, int sheetTileWidth, int sheetTileHeight, int bitsPerPixel) {
+         if (frameBytes <= 0 || sheetTileWidth <= 0 || bitsPerPixel <= 0) return (sheetTileWidth, sheetTileHeight);
+         var tileBytes = 8 * bitsPerPixel;
+         if (frameBytes % tileBytes != 0) return (sheetTileWidth, sheetTileHeight);
+         var tiles = frameBytes / tileBytes;
+         if (tiles % sheetTileWidth != 0) return (sheetTileWidth, sheetTileHeight);
+         return (sheetTileWidth, tiles / sheetTileWidth);
+      }
 
       public int Gender { get; }
       public string Title => Gender == CharacterRole.Male ? "Boy (Brendan)" : "Girl (May)";
@@ -63,7 +90,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public int OverworldIndex { get; private set; } = -1;
       public int TrainerPicIndex { get; private set; } = -1;
 
-      /// <summary>Palette indices of the overworld frames (standing, walking, walking), [x, y].</summary>
+      /// <summary>Palette indices of the overworld frames (standing facing down, up and left: see <see cref="OverworldFrameNumbers"/>), [x, y].</summary>
       public IReadOnlyList<int[,]> OverworldFrames { get; private set; } = Array.Empty<int[,]>();
       public IReadOnlyList<short> OverworldPalette { get; private set; }
       public int[,] Front { get; private set; }
@@ -167,11 +194,14 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var frameBytes = model.ReadMultiByteValue(listStart + 4, 2);
          if (first is SpriteRun) {
             // uncompressed: the frames follow each other in the ROM
+            // the picture can be formatted as the whole sheet (all frames stacked): one frame is frameBytes long, not the whole picture
             var format = first.SpriteFormat;
-            if (frameBytes <= 0) frameBytes = format.TileWidth * format.TileHeight * 8 * format.BitsPerPixel;
+            var (tileWidth, tileHeight) = FrameTileSize(frameBytes, format.TileWidth, format.TileHeight, format.BitsPerPixel);
+            var length = tileWidth * tileHeight * 8 * format.BitsPerPixel;
+            if (frameBytes <= 0) frameBytes = length;
             var start = firstAddress + frameBytes * frame;
-            if (start + frameBytes > model.Count) return null;
-            return SpriteRun.GetPixels(model, start, format.TileWidth, format.TileHeight, format.BitsPerPixel);
+            if (length <= 0 || start + length > model.Count) return null;
+            return SpriteRun.GetPixels(model, start, tileWidth, tileHeight, format.BitsPerPixel);
          }
 
          // compressed: one tall picture with every frame in it (stacked top to bottom)
@@ -193,6 +223,18 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          if (table == null || overworldIndex < 0 || overworldIndex >= table.Count) return null;
          var list = table[overworldIndex].GetSubTable("data")?[0]?.GetSubTable("sprites");
          return list == null || list.Count == 0 || list.Run == null ? null : list;
+      }
+
+      /// <summary>The animations (frame order and timing) of an entry of the overworld sprite table, read from its info's anims pointer. Empty if the entry has none.</summary>
+      public static IReadOnlyList<OverworldAnimSequence> ReadOverworldAnimations(IDataModel model, int overworldIndex, bool playerSheet) {
+         var table = model.GetTableModel(HardcodeTablesModel.OverworldSprites);
+         if (table == null || overworldIndex < 0 || overworldIndex >= table.Count) return new OverworldAnimSequence[0];
+         var info = table[overworldIndex].GetSubTable("data")?[0];
+         if (info == null) return new OverworldAnimSequence[0];
+         var start = info.GetAddress("anims"); // the address the pointer leads to: the animation table
+         if (start < 0 || start + 4 > model.Count) return new OverworldAnimSequence[0];
+         var next = model.GetNextAnchor(start + 1).Start;
+         return OverworldAnimations.Read(model, start, next > start && next < model.Count ? next - start : 0, playerSheet);
       }
 
       /// <summary>True for a sheet that lists only its first picture and stores the others right after it (the player's walking sheet).</summary>
@@ -307,7 +349,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          return role.Apply(palette, skin, clothes, secondary);
       }
 
-      /// <summary>One overworld frame (0 = standing, 1 and 2 = walking) with the skin tone, clothes colour and secondary colour painted on, as the game does when it loads the palette.</summary>
+      /// <summary>One of the shown overworld frames (0 = facing down, 1 = facing up, 2 = facing left; see <see cref="OverworldFrameNumbers"/>) with the skin tone, clothes colour and secondary colour painted on, as the game does when it loads the palette.</summary>
       public IPixelViewModel DrawOverworld(int frame, CharacterRole role, CharacterColorRow skin, CharacterColorRow clothes, CharacterColorRow secondary = null) {
          if (!HasOverworld || frame < 0 || frame >= OverworldFrames.Count) return null;
          return Draw(OverworldFrames[frame], Painted(OverworldPalette, role, skin, clothes, secondary));
@@ -318,6 +360,16 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public IPixelViewModel DrawBack(CharacterRole role, CharacterColorRow skin, CharacterColorRow clothes, CharacterColorRow secondary = null) => HasBack ? Draw(Back, Painted(BackPalette, role, skin, clothes, secondary)) : null;
 
       #endregion
+   }
+
+   /// <summary>Which way an overworld character looks.</summary>
+   public enum OverworldFacing { Down, Up, Left, Right }
+
+   /// <summary>One overworld frame of a preview: the picture and what it shows ("facing down").</summary>
+   public class CharacterFramePreview {
+      public string Label { get; }
+      public PixelPreview Image { get; }
+      public CharacterFramePreview(string label, double scale = 2) => (Label, Image) = (label, new PixelPreview(null, scale));
    }
 
    /// <summary>
@@ -375,8 +427,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public string FrameNote(int frame) {
          var list = List;
          if (list == null || !CharacterSprites.IsRelativeSheet(model, list)) return string.Empty;
-         if (frame >= 0 && frame < PlayerFrameNotes.Length) return PlayerFrameNotes[frame];
-         return frame < PlayerSheetFrames ? "running" : string.Empty;
+         var note = frame >= 0 && frame < PlayerFrameNotes.Length ? PlayerFrameNotes[frame] : frame < PlayerSheetFrames ? "running" : string.Empty;
+         // the animation table says exactly where each picture is used (and for how long): show it so the running pictures can be told apart
+         var use = OverworldAnimations.DescribeFrameUse(CharacterSprites.ReadOverworldAnimations(model, overworldIndex, true), frame);
+         return use.Count == 0 ? note : $"{note} - {string.Join(", ", use)}";
       }
 
       /// <summary>The sheet's own list points at its first picture (which knows the palette); a list with a picture for each frame points at each.</summary>

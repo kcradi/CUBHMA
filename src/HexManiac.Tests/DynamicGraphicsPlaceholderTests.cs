@@ -5,6 +5,7 @@ using Xunit;
 
 namespace HavenSoft.HexManiac.Tests {
    /// <summary>Every object event whose graphics is one of the 16 graphics variables gets the "?" placeholder, on every map, whatever scripts say.</summary>
+   [Collection("GraphicsVariableDisplay")]
    public class DynamicGraphicsPlaceholderTests : BaseViewModelTestClass {
       public DynamicGraphicsPlaceholderTests() : base(0x400) { }
 

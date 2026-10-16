@@ -11,6 +11,9 @@ namespace HavenSoft.HexManiac.Core.ViewModels.QuickEditItems {
       /// <summary>The lines of the shipped CUBE .toml, or null if it is not there.</summary>
       string[] ReadToml();
 
+      /// <summary>What the older CUBE versions look like (gzip file written by CubeFingerprint.Write), or null if it is not there.</summary>
+      byte[] ReadVersions();
+
       /// <summary>Where the files are expected, for error messages.</summary>
       string Location { get; }
    }
@@ -22,6 +25,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.QuickEditItems {
    public class ShippedCubeResources : ICubeResources {
       public const string PatchFileName = "cube_emerald.bps.gz";
       public const string TomlFileName = "cube_emerald.toml";
+      public const string VersionsFileName = "cube_versions.fp";
 
       private readonly string folder;
 
@@ -34,6 +38,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels.QuickEditItems {
 
       public byte[] ReadPatch() {
          var path = Path.Combine(folder, PatchFileName);
+         return File.Exists(path) ? File.ReadAllBytes(path) : null;
+      }
+
+      public byte[] ReadVersions() {
+         var path = Path.Combine(folder, VersionsFileName);
          return File.Exists(path) ? File.ReadAllBytes(path) : null;
       }
 
